@@ -1,6 +1,6 @@
 (() => {
  if(globalThis.__matiqGuidesCapture)return;
- const api=globalThis.browser||chrome,doc=crypto.randomUUID();let active=false,revision=0,controller=null,observer=null,timer=null,badge=null,previousHref=location.href;
+ const api=globalThis.browser||chrome,doc=crypto.randomUUID();let active=false,revision=0,controller=null,observer=null,timer=null,badge=null,previousHref=location.href,framesWarned=false;
  const targets=new Map();
  const viewport=()=>({width:innerWidth,height:innerHeight,x:scrollX,y:scrollY,scale:visualViewport?.scale||1,dpr:devicePixelRatio});
  function rectangle(element){if(!element?.isConnected)return null;const r=element.getBoundingClientRect(),x=Math.max(0,r.left),y=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);return right>x&&bottom>y?{x:x/innerWidth,y:y/innerHeight,width:(right-x)/innerWidth,height:(bottom-y)/innerHeight}:null;}
@@ -25,14 +25,15 @@
   const id=crypto.randomUUID();targets.set(id,element);while(targets.size>8)targets.delete(targets.keys().next().value);
   send({command:'action',event:{id,at:Date.now(),action:element.tagName==='SELECT'?'select':['checkbox','radio'].includes(element.type)?'toggle':'fill',control:role(element),label:''},context:context(id)}).catch(()=>{});
  }
+ function warnFrames(){if(!framesWarned&&document.querySelector('iframe,frame')){framesWarned=true;send({command:'warning',reason:'This page contains embedded frames. Only the top-level page is supported; actions inside frames will be missing.'}).catch(()=>{});}}
  function stop(){active=false;controller?.abort();controller=null;observer?.disconnect();observer=null;clearTimeout(timer);badge?.remove();badge=null;targets.clear();}
  function start(){
-  stop();document.getElementById('matiq-guides-capture-error')?.remove();active=true;controller=new AbortController();const options={capture:true,signal:controller.signal};
+  stop();framesWarned=false;document.getElementById('matiq-guides-capture-error')?.remove();active=true;controller=new AbortController();const options={capture:true,signal:controller.signal};
   addEventListener('pagehide',stop,{signal:controller.signal});addEventListener('mousedown',action,options);addEventListener('change',form,options);addEventListener('scroll',changed,options);addEventListener('resize',changed,options);addEventListener('popstate',changed,options);addEventListener('hashchange',changed,options);visualViewport?.addEventListener('resize',changed,{signal:controller.signal});
   badge=document.createElement('div');badge.id='matiq-guides-recording';badge.style.cssText='position:fixed;z-index:2147483647;right:12px;top:12px';
   const shadow=badge.attachShadow({mode:'closed'}),label=document.createElement('span');label.textContent='● MatiQ Guides recording';label.style.cssText='display:block;padding:8px 12px;color:white;background:#8b241b;border-radius:6px;font:13px sans-serif';shadow.append(label);document.documentElement.append(badge);
-  observer=new MutationObserver(records=>{if(!badge?.isConnected){send({command:'interrupted',reason:'The page removed the recording indicator. Capture paused; reopen the extension before continuing.'}).catch(()=>{});return;}if(records.some(record=>record.target!==badge))changed();});observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});
-  if(document.querySelector('iframe,frame'))send({command:'warning',reason:'This page contains embedded frames. Only the top-level page is supported; actions inside frames will be missing.'}).catch(()=>{});
+  observer=new MutationObserver(records=>{if(!badge?.isConnected){send({command:'interrupted',reason:'The page removed the recording indicator. Capture paused; reopen the extension before continuing.'}).catch(()=>{});return;}if(records.some(record=>record.type==='childList'))warnFrames();if(records.some(record=>record.target!==badge))changed();});observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});
+  warnFrames();
   return context();
  }
  api.runtime.onMessage.addListener((message,_sender,reply)=>{
