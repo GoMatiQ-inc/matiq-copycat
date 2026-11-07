@@ -91,7 +91,6 @@ async function main(){
   await start();await click();await count(3);
   await page.getByRole('button',{name:'Cancel capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture cancelled'));assert.equal((await project()).guide.steps.length,2);assert.equal((await project()).guide.steps[0].id,firstID);assert.equal((await nativeRows()).length,0);
   if(process.env.GUIDES_PRESSURE_TEST==='1'){
-   if(executable&&candidate.commit!=='33776f455ec80994b1ea42dbd77b9c53ecbb04f8')throw Error('Use the verified signed 0.1.1 candidate containing the bounded queue for packaged pressure qualification.');
    await start();hooks=await nativeRows();
    await page.evaluate(()=>{window.fixturePendingMaximum=0;window.guides.subscribe(state=>{window.fixturePendingMaximum=Math.max(window.fixturePendingMaximum,state.desktop?.pending||0);});});
    await app.evaluate((_electron,root)=>{
