@@ -8,3 +8,6 @@ extensions-dist/
 
 __pycache__/
 *.pyc
+
+native/guides-capture
+native/GuidesNativeFixture

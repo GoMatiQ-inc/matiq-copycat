@@ -20,7 +20,8 @@
     "build:extensions": "node scripts/build-extensions.cjs",
     "test:browser": "node scripts/browser-test.cjs",
     "test:native": "python3 scripts/test-native.py",
-    "prepackage": "node scripts/build-native.cjs"
+    "prepackage": "node scripts/build-native.cjs",
+    "test:capture-native": "node scripts/capture-native-test.cjs"
   },
   "dependencies": {
     "@matiq-solutions/runtime": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-runtime-0.1.3.tgz",
@@ -45,8 +46,7 @@
       "minimumSystemVersion": "14.2",
       "hardenedRuntime": true,
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "Capture screenshots only for the workflow you explicitly record.",
-        "NSAppleEventsUsageDescription": "Read control context only in your selected workflow application."
+        "NSScreenCaptureUsageDescription": "Capture screenshots only for the workflow you explicitly record."
       }
     },
     "files": [
@@ -72,6 +72,10 @@
       {
         "from": "native/guides-bridge",
         "to": "native/guides-bridge"
+      },
+      {
+        "from": "native/guides-capture",
+        "to": "native/guides-capture"
       }
     ]
   },

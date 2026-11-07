@@ -18,7 +18,7 @@ function instruction(event){
  if(event.action==='select')return control?`Choose an option in “${control}”`:'Choose an option in the dropdown';
  if(event.action==='toggle')return control?`Change “${control}”`:`Change the ${noun}`;
  if(event.action==='click')return control?`Click “${control}”`:`Click the ${noun}`;
- throw Error('Unsupported browser action. Add an editable manual step for this action.');
+ throw Error('Unsupported capture action. Add an editable manual step for this action.');
 }
 function begin(project,source='browser'){
  if(project.capture&&['recording','paused'].includes(project.capture.phase))throw Error('Finish or cancel the current capture before starting another.');
@@ -43,9 +43,15 @@ function append(project,event){
  if(!Number.isSafeInteger(event.at)||event.at<capture.started||event.at>Date.now()+5000||!capture.windows.some(w=>event.at>=w[0]&&(!w[1]||event.at<=w[1])))throw Error('This action occurred outside active recording. Resume capture before performing it again.');
  if(project.guide.steps.length>=500)throw Error('The guide reached 500 steps. Stop capture and begin another guide.');
  const next=P.clone(project),s=P.step();s.id=event.id;s.timestamp=event.at;
- if(event.source!=='browser'||!['browser','mixed'].includes(capture.source))throw Error('The action source is outside this capture scope.');
- const url=new URL(event.origin);if(!['https:','http:'].includes(url.protocol)||url.origin!==event.origin)throw Error('Browser context must be an HTTP(S) origin without paths or query data.');
- s.kind='browser';s.instruction=instruction(event);s.source={origin:url.origin};
+ if(!['browser','desktop'].includes(event.source)||![event.source,'mixed'].includes(capture.source))throw Error('The action source is outside this capture scope.');
+ s.kind=event.source;s.instruction=instruction(event);
+ if(event.source==='browser'){
+  const url=new URL(event.origin);if(!['https:','http:'].includes(url.protocol)||url.origin!==event.origin)throw Error('Browser context must be an HTTP(S) origin without paths or query data.');
+  s.source={origin:url.origin};
+ }else{
+  if(event.action!=='click'||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires a selected application and a supported mouse action.');
+  s.source={application:event.application};
+ }
  if(!event.image||typeof event.image.data!=='string'||event.image.data.length>950000)throw Error('Capture screenshot is missing or exceeds the bridge limit. Reduce its size and retry.');
  const bytes=Buffer.from(event.image.data,'base64');if(bytes.toString('base64')!==event.image.data)throw Error('Capture screenshot encoding is invalid.');
  s.asset=P.addImage(next,bytes);if(next.assets[s.asset].mediaType!==event.image.mediaType)throw Error('Capture image type does not match its bytes.');

@@ -2,7 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const {randomUUID} = require('node:crypto');
 const {app, dialog, BrowserWindow, nativeImage} = require('electron');
-const C=require('./capture.cjs'),B=require('./bridge.cjs');
+const C=require('./capture.cjs'),B=require('./bridge.cjs'),D=require('./desktop.cjs');
 const identities=require('../extension/identities.json');
 const P = require('./project.cjs');
 const {documentation, markdown} = require('./export.cjs');
@@ -10,24 +10,26 @@ exports.activate = async host => {
   const library=path.join(host.dataDir,'guides');await fs.mkdir(library,{recursive:true,mode:0o700});
   let current=null,file=null,release=null,dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
   const windows=new Set();let bridge=null,browserOwner=null,finishPending=false,stateRevision=0,pendingInterruption=null,quiesce=null;
+  let desktopChoices=[],desktop=null,desktopQueue=Promise.resolve(),desktopAccepting=false,desktopCutoff=0,desktopInterrupting=null;
   const activeCapture=()=>current?.capture&&['recording','paused'].includes(current.capture.phase);
-  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure,bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
+  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure,desktop:!!desktop,bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
   const notify=()=>{host.emit('com.matiq.guides:state',snapshot());bridge?.broadcast({type:'status',status:browserStatus()});};
-  function browserStatus(){return {revision:stateRevision,receiver:bridge?.receiver,instance:app.getName(),guide:current?{id:current.guide.id,title:current.guide.title}:null,capture:current?.capture||null,finishPending};}
+  function browserStatus(){return {revision:stateRevision,receiver:bridge?.receiver,instance:app.getName(),guide:current?{id:current.guide.id,title:current.guide.title}:null,capture:current?.capture?.source==='desktop'?null:current?.capture||null,finishPending};}
   async function captureWrite(next){saveState='saving';notify();try{await P.atomicWrite(file,next);current=next;stateRevision++;saveState='saved';dirty=false;failure='';notify();}catch(error){saveState='failed';failure='Capture was not saved. Reconnect and retry the pending step: '+error.message;notify();throw Error(failure);}}
   async function captureControl(command,reason=''){if(command==='stop'||command==='cancel')finishPending=false;if(!current)throw Error('Create or open a guide first.');await captureWrite(command==='start'?C.begin(current):C.transition(current,command,reason));return snapshot();}
   async function endWork(){working=false;const reason=pendingInterruption;pendingInterruption=null;if(reason&&activeCapture()){working=true;try{await captureWrite(current.capture.phase==='recording'?C.transition(current,'pause',reason):C.warn(current,reason));}finally{working=false;}}}
-  async function quiesceBrowser(){if(!browserOwner||browserOwner.socket.destroyed||!activeCapture())return;let timer;try{await new Promise((resolve,reject)=>{quiesce={id:randomUUID(),resolve};timer=setTimeout(()=>reject(Error('The browser did not confirm that capture stopped. Close its extension or browser, then retry closing Guides.')),5000);bridge.broadcast({type:'pause-request',control:quiesce.id,reason:'Guides is closing. Browser capture stopped; reopen and explicitly resume when ready.'});});}finally{clearTimeout(timer);quiesce=null;}}
+  async function quiesceBrowser(){if(!browserOwner||browserOwner.socket.destroyed||!activeCapture()||current.capture.source==='desktop')return;let timer;try{await new Promise((resolve,reject)=>{quiesce={id:randomUUID(),resolve};timer=setTimeout(()=>reject(Error('The browser did not confirm that capture stopped. Close its extension or browser, then retry closing Guides.')),5000);bridge.broadcast({type:'pause-request',control:quiesce.id,reason:'Guides is closing. Browser capture stopped; reopen and explicitly resume when ready.'});});}finally{clearTimeout(timer);quiesce=null;}}
   async function enableBridge(){
     if(bridge)return;
     bridge=await B.start({directory:path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge'),instance:app.getName(),origins:[`chrome-extension://${identities.chromiumId}/`,identities.firefoxId],report:error=>{failure='Browser bridge cleanup needs attention: '+error.message;notify();},
-      disconnect:async client=>{if(browserOwner!==client)return;quiesce?.resolve();browserOwner=null;if(disposing)return;if(current?.capture?.phase==='recording'){if(working){pendingInterruption='The browser disconnected during an operation. Recording stopped; reconnect and review pending steps.';failure=pendingInterruption;notify();return;}working=true;try{await captureControl('pause','Browser disconnected. Recording stopped; reconnect and review pending steps.');}finally{await endWork();}}notify();},
+      disconnect:async client=>{if(browserOwner!==client)return;quiesce?.resolve();browserOwner=null;if(disposing)return;if(current?.capture?.phase==='recording'&&current.capture.source!=='desktop'){if(working){pendingInterruption='The browser disconnected during an operation. Recording stopped; reconnect and review pending steps.';failure=pendingInterruption;notify();return;}working=true;try{await captureControl('pause','Browser disconnected. Recording stopped; reconnect and review pending steps.');}finally{await endWork();}}notify();},
       receive:async(message,client)=>{
         if(message.type==='quiesced'&&client===browserOwner&&quiesce?.id===message.control){quiesce.resolve();return {acknowledged:true};}
         if(disposing||disposed)throw Error('Guides is closing. Reopen it before reconnecting.');
         if(message.type==='status')return browserStatus();
         if(message.type==='select'){if(message.receiver!==bridge.receiver)throw Error('Choose the currently displayed receiving instance.');if(browserOwner&&browserOwner!==client)throw Error('Another browser owns this capture. Stop or disconnect it before selecting this browser.');browserOwner=client;notify();return browserStatus();}
         if(browserOwner!==client||message.receiver!==bridge.receiver)throw Error('Select this receiving instance explicitly before recording.');
+        if(activeCapture()&&current.capture.source==='desktop')throw Error('Desktop capture owns this guide. Stop it in Guides before recording browser actions.');
         if(working)throw Error('Guides is saving or awaiting a dialog. Retry the unacknowledged action shortly.');working=true;
         try{
           if(message.type==='start'){if(dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Save the current guide before starting capture.');if(!current)throw Error('Create or open a guide in the desktop app first.');const origin=new URL(message.origin);if(!['https:','http:'].includes(origin.protocol)||origin.origin!==message.origin)throw Error('Select a normal HTTP(S) browser page.');const approval=await dialog.showMessageBox(host.window,{type:'question',message:'Record this browser workflow?',detail:`Append steps from the selected tab at ${origin.origin} to “${current.guide.title}”. Screenshots may contain sensitive information. Review and redact before sharing.`,buttons:['Cancel','Start capture'],cancelId:0,defaultId:0});if(approval.response!==1)throw Error('Capture was not started.');if(client.socket.destroyed||browserOwner!==client)throw Error('The browser disconnected before approval. Capture did not start; reconnect and try again.');await captureControl('start');await endWork();return browserStatus();}
@@ -38,6 +40,40 @@ exports.activate = async host => {
           throw Error('Unsupported Guides bridge command.');
         }finally{await endWork();}
       }});notify();
+  }
+  async function stopDesktop(){
+    desktopCutoff=desktopCutoff||Date.now();desktopAccepting=false;const owned=desktop;
+    if(owned){await owned.stop();if(desktop===owned)desktop=null;}
+    await desktopQueue;
+  }
+  function desktopInterrupted(error){
+    desktopAccepting=false;
+    if(desktopInterrupting)return;
+    desktopInterrupting=(async()=>{
+      try{
+        await stopDesktop();
+        if(disposing||disposed)return;
+        if(working){pendingInterruption=error.message;return;}
+        if(activeCapture()){
+          working=true;
+          try{await captureWrite(current.capture.phase==='recording'?C.transition(current,'pause',error.message):C.warn(current,error.message));}finally{await endWork();}
+        }
+      }catch(cleanup){failure='Desktop capture cleanup failed. Retry pause or closing Guides: '+cleanup.message;notify();}
+      finally{desktopInterrupting=null;}
+    })();
+  }
+  async function startDesktop(choice){
+    desktopCutoff=0;desktopAccepting=true;
+    try{
+      desktop=await D.start(host,choice.id,choice.pid,event=>{
+        if(!desktopAccepting&&(!desktop||event.at>desktopCutoff))return;
+        desktopQueue=desktopQueue.then(async()=>{
+          const capture=current.capture;
+          const result=C.append(current,{...event,id:randomUUID(),session:capture.id,scope:capture.scope,sequence:capture.receipts.length});
+          try{await captureWrite(result.project);}catch(error){current=result.project;stateRevision++;throw error;}
+        }).catch(error=>{queueMicrotask(()=>desktopInterrupted(error));});
+      },desktopInterrupted);
+    }catch(error){desktopAccepting=false;throw error;}
   }
   async function idle(){if(activeCapture())throw Error('Stop or cancel capture before switching guides.');if(dirty)throw Error('Save your guide before switching or closing it.');}
   async function closeProject(){if(release){await release();release=null;}current=null;file=null;dirty=false;}
@@ -84,7 +120,25 @@ exports.activate = async host => {
     try {
       if(name==='bridge-enable'){await enableBridge();return snapshot();}
       if(name==='bridge-install'){return require('./bridge-install.cjs').install({host,browser:args});}
-      if(name==='capture-control'){if(!['pause','resume','stop','cancel'].includes(args))throw Error('Choose a supported capture control.');if(args==='resume')throw Error('Resume from the extension to explicitly select the visible browser tab.');if(args==='stop'&&browserOwner&&!browserOwner.socket.destroyed){finishPending=true;bridge.broadcast({type:'finish-request'});return snapshot();}if(args==='stop'&&(!browserOwner||browserOwner.socket.destroyed)&&activeCapture()){const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Finish without a connected browser?',detail:'Unacknowledged extension steps may still be pending. Reconnect to deliver them, or finish with an incomplete-capture warning.',buttons:['Reconnect first','Finish with saved steps only'],cancelId:0,defaultId:0});if(choice.response!==1)return snapshot();await captureControl('stop','Capture finished without a connected browser. Pending steps may be missing; review before sharing.');return snapshot();}await captureControl(args);return snapshot();}
+      if(name==='desktop-list'){
+        if(activeCapture()&&current.capture.phase==='recording')throw Error('Pause or stop capture before selecting another window.');
+        const choice=await dialog.showMessageBox(host.window,{type:'info',message:'Select a desktop workflow window',detail:'Guides will request Screen Recording permission to list windows. Recording starts only after you choose a window and approve it. Browser workflows use the extension instead.',buttons:['Cancel','Choose window'],cancelId:0,defaultId:0});
+        desktopChoices=choice.response===1?await D.list(host):[];return desktopChoices;
+      }
+      if(name==='desktop-start'){
+        if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Create and save a guide before recording.');
+        if(activeCapture()&&!(current.capture.source==='desktop'&&current.capture.phase==='paused'))throw Error('Stop the current capture before recording a desktop window.');
+        const selected=desktopChoices.find(w=>w.id===args);if(!selected)throw Error('Refresh the window list and select a visible application window.');
+        const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Record the selected desktop window?',detail:'Selected application: '+selected.application+'. Only mouse actions in the selected foreground window are captured. Accessibility permission provides control labels; field values and keystrokes are never read. Screenshots can contain secrets. Browser windows, menus, dialogs and other windows are outside this scope. Review and redact before sharing.',buttons:['Cancel','Start recording'],cancelId:0,defaultId:0});
+        if(choice.response!==1)return snapshot();
+        await captureWrite(activeCapture()?C.transition(current,'resume'):C.begin(current,'desktop'));
+        try{await startDesktop(selected);}catch(error){await captureWrite(C.transition(current,'pause',error.message));throw error;}
+        notify();return snapshot();
+      }
+      if(name==='capture-control'){if(!['pause','resume','stop','cancel'].includes(args))throw Error('Choose a supported capture control.');if(current?.capture?.source==='desktop'){
+        if(args==='resume')throw Error('Refresh the desktop window list and choose Start / resume selected window explicitly.');
+        await stopDesktop();if(desktopInterrupting)await desktopInterrupting;const reason=pendingInterruption||'';pendingInterruption=null;await captureControl(args,reason);return snapshot();
+      }if(args==='resume')throw Error('Resume from the extension to explicitly select the visible browser tab.');if(args==='stop'&&browserOwner&&!browserOwner.socket.destroyed){finishPending=true;bridge.broadcast({type:'finish-request'});return snapshot();}if(args==='stop'&&(!browserOwner||browserOwner.socket.destroyed)&&activeCapture()){const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Finish without a connected browser?',detail:'Unacknowledged extension steps may still be pending. Reconnect to deliver them, or finish with an incomplete-capture warning.',buttons:['Reconnect first','Finish with saved steps only'],cancelId:0,defaultId:0});if(choice.response!==1)return snapshot();await captureControl('stop','Capture finished without a connected browser. Pending steps may be missing; review before sharing.');return snapshot();}await captureControl(args);return snapshot();}
       if(activeCapture()&&!['list'].includes(name))throw Error('Stop or cancel capture before editing, switching or exporting.');
       if(name==='list'){
         const names=(await fs.readdir(library)).filter(n=>n.endsWith('.mqguide'));const rows=[];
@@ -151,10 +205,11 @@ exports.activate = async host => {
       if(working)throw Error('Wait for the current save or native dialog to finish, then retry closing Guides.');
       disposing=true;
       try{
+        await stopDesktop();if(desktopInterrupting)await desktopInterrupting;
         await quiesceBrowser();
         const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');
         if((dirty||rendererDirty)&&current){const draft=P.validate(await host.view.webContents.executeJavaScript('window.guidesDraftSnapshot()'));if(draft.guide.id!==current.guide.id)throw Error('The pending edit identity changed. Keep Guides open and save a recovered project before retrying closure.');await P.atomicWrite(file+'.draft',draft);}
-        if(current?.capture?.phase==='recording')await captureWrite(C.transition(current,'pause','Guides closed during capture. Reconnect explicitly and review pending browser steps before continuing.'));
+        if(current?.capture?.phase==='recording')await captureWrite(C.transition(current,'pause',(pendingInterruption?pendingInterruption+' ':'')+'Guides closed during capture. Reconnect explicitly and review pending steps before continuing.'));
         if(bridge){await bridge.dispose();bridge=null;browserOwner=null;}
         await host.view.webContents.executeJavaScript('window.guidesDispose()');for(const win of windows){win.destroy();windows.delete(win);}await closeProject();disposed=true;
       }finally{disposing=false;}

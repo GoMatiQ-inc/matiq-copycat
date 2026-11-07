@@ -37,3 +37,12 @@ test('private bridge rejects an unapproved identity and an incorrect token befor
  }
  assert.equal(calls,0);
 });
+
+test('desktop steps join browser guides without recording values or inventing unknown control names',()=>{
+ let p=C.begin(P.create());p=C.append(p,event(p)).project;p=C.transition(p,'stop');const browser=p.guide.steps[0].id;
+ p=C.begin(p,'desktop');p=C.append(p,event(p,{source:'desktop',application:'Guides Native Fixture',label:'',control:'unknown',value:'CONTROLLED-SECRET',url:'https://invalid.test/private'})).project;
+ assert.equal(p.guide.steps[0].id,browser);assert.equal(p.guide.steps[1].kind,'desktop');assert.equal(p.guide.steps[1].instruction,'Click the control');
+ assert.deepEqual(p.guide.steps[1].source,{application:'Guides Native Fixture'});assert.ok(!JSON.stringify(p).includes('CONTROLLED-SECRET'));assert.ok(!JSON.stringify(p).includes('/private'));
+ assert.throws(()=>C.append(p,event(p)),/outside/);
+ const cancelled=C.transition(p,'cancel');assert.equal(cancelled.guide.steps.length,1);assert.equal(cancelled.guide.steps[0].id,browser);
+});
