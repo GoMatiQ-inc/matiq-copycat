@@ -6,7 +6,7 @@ Reconcile the exact committed source on the authorized native release host. Use 
 
 ## Candidate artifacts
 
-Run `npm ci --no-audit --no-fund`. With the existing company signing credentials loaded through the protected launcher, run `npm run release:candidate`. The script validates the build before opening SDK `withMacKeychain` and nested `withNotaryProfile` wrappers, then builds/signs/notarizes the DMG and ZIP without publishing. P12 and Apple passwords must never enter command arguments, source, logs or retained plaintext files. The SDK wrappers restore and remove their owned keychains in finally blocks.
+Run `npm ci --no-audit --no-fund`. With the existing company signing credentials loaded through the protected launcher, run `npm run release:candidate`. The script validates the build before opening SDK `withMacKeychain` and nested `withNotaryProfile` wrappers, then builds/signs/notarizes the DMG and ZIP without publishing. The disk image is signed, submitted and stapled inside the same SDK credential wrappers, then its blockmap and update metadata are regenerated from the final bytes. P12 and Apple passwords must never enter command arguments, source, logs or retained plaintext files. The SDK wrappers restore and remove their owned keychains in finally blocks.
 
 The output app is `dist/mac-arm64/MatiQ Guides.app`. Both native helpers are extra resources in that same app. `npm run verify:release` checks company signatures, hardened runtime, helper signatures, safe entitlements, stapled tickets, Gatekeeper and the app extracted from the ZIP. It writes compact `dist/mac-signature.json` with exact source and artifact hashes.
 

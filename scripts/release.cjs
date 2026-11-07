@@ -6,6 +6,6 @@ async function main(){
  await require('app-builder-lib/out/util/config/config').validateConfiguration(config,{isEnabled:false});
  require('./build-native.cjs');
  const {build,Platform,Arch}=require('electron-builder');
- await withMacKeychain(process.env,()=>withNotaryProfile(process.env,()=>build({projectDir:path.join(__dirname,'..'),targets:Platform.MAC.createTarget(['dmg','zip'],Arch.arm64),config:path.join(__dirname,'release-config.cjs'),publish:'never'})),{requireInstaller:false});
+ await withMacKeychain(process.env,()=>withNotaryProfile(process.env,async()=>{await build({projectDir:path.join(__dirname,'..'),targets:Platform.MAC.createTarget(['dmg','zip'],Arch.arm64),config:path.join(__dirname,'release-config.cjs'),publish:'never'});await require('./notarize-container.cjs')();}),{requireInstaller:false});
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});
