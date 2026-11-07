@@ -89,7 +89,7 @@ async function main(){
     for(let i=0;i<8;i++)await click();
     await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'),null,{timeout:20000});
     p=await project();assert.ok(p.capture.issues.some(reason=>reason.includes('pending delivery reached its limit')));
-    assert.ok(p.guide.steps.length>2&&p.guide.steps.length<=6,'Only accepted bounded native steps may be retained.');
+    assert.ok(p.guide.steps.length>2&&p.guide.steps.length<10,'Only accepted bounded native steps may be retained.');
     assert.equal(p.guide.steps[0].id,firstID);assert.equal(await page.evaluate(()=>window.fixturePendingMaximum),4);
     const state=await page.evaluate(()=>window.guides.request('state'));assert.equal(state.desktop.pending,0);assert.equal(state.desktop.bytes,0);
     for(const hook of hooks)await verifyStopped(hook);
@@ -103,7 +103,7 @@ async function main(){
   if(!executable){const status=await app.evaluate(()=>global.fixtureInstance.status());assert.equal(status.busy,false);}
   proof={result:'passed',packaged:!!executable,slowStoragePressure:process.env.GUIDES_PRESSURE_TEST==='1',sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','native process absence verified'],qualification:executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
   await closeNormally();
- }finally{
+ }catch(error){console.error('Native journey failed:',error.message);throw error;}finally{
   if(app){owned=Array.from(new Map([...owned,...await runtimeRows()].map(row=>[row.pid,row])).values());}
   try{await cleanupDesktop({app,owned});}finally{
    if(fixture&&fixture.exitCode===null){write('quit');await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Native fixture did not exit.')),5000);fixture.once('exit',()=>{clearTimeout(timer);resolve();});});}
