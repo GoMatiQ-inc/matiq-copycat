@@ -39,8 +39,8 @@ func ownedWindow() -> AXUIElement? {
 }
 func focus(_ done:@escaping (AXUIElement)->Void) {
  guard let target=target,let window=ownedWindow() else {fail("The owned TextEdit document is no longer available.");return}
- target.activate(options:[.activateIgnoringOtherApps])
- AXPerformAction(window,kAXRaiseAction as CFString)
+ target.activate(options:[])
+ AXUIElementPerformAction(window,kAXRaiseAction as CFString)
  DispatchQueue.main.asyncAfter(deadline:.now()+0.3) {
   guard NSWorkspace.shared.frontmostApplication?.processIdentifier==target.processIdentifier else {fail("The owned TextEdit instance could not receive focus.");return}
   done(window)
