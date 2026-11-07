@@ -41,7 +41,7 @@ async function main(){
   const pixels=await page.evaluate(async project=>{const asset=project.assets[project.guide.steps[0].asset],im=new Image();im.src='data:image/png;base64,'+asset.data;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');x.drawImage(im,0,0);return Array.from(x.getImageData(15,15,1,1).data);},sanitized);assert.deepEqual(pixels,[0,0,0,255]);
   assert.ok((await fs.readFile(path.join(temporary,'export.pdf'))).subarray(0,5).toString()==='%PDF-');
   await cleanupDesktop({app,owned});app=null;owned=[];
-  page=await launch();await page.getByRole('button',{name:/Offline onboarding/}).click();assert.equal(await page.getByLabel('Instruction',{exact:true}).inputValue(),'Open the settings panel');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Review this step');
+  page=await launch();await page.getByRole('button',{name:/Offline onboarding/}).click();await page.waitForFunction(()=>document.querySelector('#instruction').value==='Open the settings panel');assert.equal(await page.getByLabel('Instruction',{exact:true}).inputValue(),'Open the settings panel');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Review this step');
   assert.equal((await fs.readFile(guideFile,'utf8')).includes(stepID),true);
   await page.getByLabel('Notes',{exact:true}).fill('Recovered interrupted edit');
   await app.evaluate(({app,dialog})=>{global.fixtureCloseError='';dialog.showErrorBox=(_title,detail)=>{global.fixtureCloseError=detail;};app.quit();});
@@ -53,7 +53,7 @@ async function main(){
   const exited=once(app.process(),'exit');app.process().kill('SIGKILL');await exited;
   await cleanupDesktop({app,owned});app=null;owned=[];
   page=await launch();await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});
-  await page.getByRole('button',{name:/Offline onboarding/}).click();assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Recovered interrupted edit');
+  await page.getByRole('button',{name:/Offline onboarding/}).click();await page.waitForFunction(()=>document.querySelector('#notes').value==='Recovered interrupted edit');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Recovered interrupted edit');
   assert.equal(await page.locator('#save-state').innerText(),'Unsaved');
   await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
   await assert.rejects(fs.access(guideFile+'.draft'),{code:'ENOENT'});
