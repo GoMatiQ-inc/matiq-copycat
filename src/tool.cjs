@@ -128,7 +128,7 @@ exports.activate = async host => {
         const extension={html:'html',markdown:'md',pdf:'pdf',editable:'mqguide',sanitized:'mqguide'}[args];
         const choice=await dialog.showSaveDialog(host.window,{defaultPath:'Guide.'+extension,filters:[{name:'Guide export',extensions:[extension]}]});if(choice.canceled)return {canceled:true};
         const target=choice.filePath,canonicalParent=await fs.realpath(path.dirname(target));
-        for(const root of host.protectedRoots){const base=await fs.realpath(root);const relative=path.relative(base,path.join(canonicalParent,path.basename(target)));if(relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('Choose an export destination outside application resources and managed data.');}
+        for(const root of [...host.protectedRoots,path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge')]){let base;try{base=await fs.realpath(root);}catch(error){if(error.code==='ENOENT')continue;throw error;}const relative=path.relative(base,path.join(canonicalParent,path.basename(target)));if(relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('Choose an export destination outside application resources and managed data.');}
         try{const existing=await fs.lstat(target);if(existing.isSymbolicLink()||!existing.isFile())throw Error('Choose a regular destination file, not a symbolic link or directory.');}catch(error){if(error.code!=='ENOENT')throw error;}
         if(args==='editable'||args==='sanitized'){await P.atomicWrite(target,args==='editable'?current:await flattened(true));return {saved:true};}
         const flat=await flattened();
