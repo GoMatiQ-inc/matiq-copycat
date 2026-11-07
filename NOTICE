@@ -1,0 +1,6 @@
+MatiQ Guides — Copyright MatiQ Inc.
+MatiQ source is governed by LICENSE.
+Third-party dependencies retain their own licenses and notices in their packages.
+MatiQ Solutions SDK, runtime, shell, fonts and brand assets are consumed from the qualified sdk-v0.1.3 release.
+Electron and its bundled Chromium/Node components retain their bundled notices.
+No competitor code or assets are included.
