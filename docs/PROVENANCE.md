@@ -13,3 +13,5 @@ Apple's ScreenCaptureKit SCScreenshotManager, NSEvent global mouse monitoring an
 - https://developer.apple.com/documentation/screencapturekit/scscreenshotmanager
 - https://developer.apple.com/documentation/appkit/nsevent/addglobalmonitorforevents(matching:handler:)
 - https://developer.apple.com/documentation/applicationservices/axuielement
+
+Firefox permission behavior was checked against Mozilla's [captureVisibleTab](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/tabs/captureVisibleTab), [optional host permissions](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/optional_host_permissions), and [geckodriver flags](https://firefox-source-docs.mozilla.org/testing/geckodriver/Flags.html) documentation. The owned Firefox qualification fixture invokes the installed browser's WebDriver event API for trusted UI input. No Mozilla implementation source is copied, adapted, vendored or shipped by Guides; geckodriver is a test-only external tool. Permission UI, capture scope guards and failure handling are independently implemented.
