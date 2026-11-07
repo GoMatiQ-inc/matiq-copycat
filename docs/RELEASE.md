@@ -26,3 +26,7 @@ With the actual installed standalone and suite executable paths in `GUIDES_EXECU
 
 
 `node scripts/mixed-project-test.cjs` imports the actual captured project named by `GUIDES_PROJECT_INPUT` into the signed form selected by the existing packaged executable variables, edits its native step, saves, quits/reopens and re-exports. Its checks compare the full project, including real captured image bytes and stable identities. Feed the suite export back to standalone to verify the return journey. Outputs under `.validation` contain controlled fixture screenshots, including retained originals; they are private test artifacts, not sanitized documentation.
+
+## Competing packaged forms
+
+With both signed executables, package and candidate proof supplied as above, plus `GUIDES_MIXED_PROJECT` naming an actual captured browser/native portable project, run `node scripts/competing-forms-test.cjs` through the native storage guard. At harness adf85ee, desktop 0.1.2/source d582c20 and suite 0.1.1 pass on macOS 27.0.1 arm64: actual suite Open visibly refuses the live standalone owner; SDK lease, bridge receiver and saved project bytes remain unchanged; no second workspace starts. After normal standalone exit and independent cleanup, suite retry acquires a new owner nonce and imports the intact mixed guide into its distinct data root. Both forms then exit normally and owned processes/listeners are absent. This covers the standalone-first direction with controlled import dialogs. Reverse-direction launch and explicit external-project writer cases remain separate evidence.
