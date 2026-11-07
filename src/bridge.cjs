@@ -12,7 +12,7 @@ async function start({directory,instance,origins,receive,disconnect,report=()=>{
  try {const old=JSON.parse(await fs.readFile(descriptor,'utf8'));if(!Number.isSafeInteger(old.pid)||old.pid<1)throw Error('Bridge ownership is damaged. Inspect the active record before retrying.');try{process.kill(old.pid,0);throw Error('Another Guides bridge is active. Close its receiving instance first.');}catch(error){if(error.code!=='ESRCH')throw error;}await fs.unlink(descriptor);}catch(error){if(error.code!=='ENOENT')throw error;}
  const clients=new Set(),operations=new Set();let closing=false,disposed=false,descriptorRemoved=false;
  const server=net.createServer(socket=>{
-  const client={socket,authenticated:false,origin:null};clients.add(client);let queue=Promise.resolve(),pending=0;
+  const client={socket,authenticated:false,rejected:false,origin:null};clients.add(client);let queue=Promise.resolve(),pending=0;
   const send=value=>{if(!socket.destroyed){if(socket.writableLength>2*LIMIT){socket.destroy();return;}socket.write(frame(value));}};
   socket.setTimeout(60000,()=>socket.destroy());
   socket.on('error',()=>socket.destroy());
@@ -20,13 +20,13 @@ async function start({directory,instance,origins,receive,disconnect,report=()=>{
   socket.on('data',decoder(value=>{
    if(++pending>16){socket.destroy();return;}
    const operation=queue.then(async()=>{
-    if(closing)return;
+    if(closing||client.rejected||socket.destroyed)return;
     if(!client.authenticated){
      const proposed=typeof value.token==='string'?Buffer.from(value.token):Buffer.alloc(0),expected=Buffer.from(token);
-     if(value.v!==1||value.type!=='authenticate'||!origins.includes(value.origin)||proposed.length!==expected.length||!timingSafeEqual(proposed,expected)){send({v:1,type:'error',error:'Bridge authentication failed. Reinstall the approved bridge and extension.'});socket.end();return;}
+     if(value.v!==1||value.type!=='authenticate'||!origins.includes(value.origin)||proposed.length!==expected.length||!timingSafeEqual(proposed,expected)){send({v:1,type:'error',error:'Bridge authentication failed. Reinstall the approved bridge and extension.'});client.rejected=true;socket.end();return;}
      client.authenticated=true;client.origin=value.origin;send({v:1,type:'ready',instance,receiver:nonce});return;
     }
-    if(value.v!==1||typeof value.requestId!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(value.requestId)){send({v:1,type:'error',error:'Unsupported bridge protocol or request identity. Update the extension and receiving tool together.'});return;}
+    if(value.v!==1||typeof value.requestId!=='string'||!/^[a-zA-Z0-9-]{1,64}$/.test(value.requestId)){send({v:1,type:'error',error:'Unsupported bridge protocol or request identity. Update the extension and receiving tool together.'});client.rejected=true;socket.end();return;}
     try{const result=await receive(value,client);send({v:1,requestId:value.requestId,result});}catch(error){send({v:1,requestId:value.requestId,error:error.message});}
    }).catch(error=>{report(error);socket.destroy();}).finally(()=>{pending--;operations.delete(operation);});queue=operation;operations.add(operation);
   },()=>socket.destroy()));
@@ -37,7 +37,7 @@ async function start({directory,instance,origins,receive,disconnect,report=()=>{
  }catch(error){for(const client of clients)client.socket.destroy();server.close();try{await fs.unlink(socketPath);}catch(e){if(e.code!=='ENOENT')throw new AggregateError([error,e],'Bridge startup cleanup failed. Inspect its owned socket.');}throw error;}
  return {
   receiver:nonce,
-  broadcast(event){for(const client of clients)if(client.authenticated&&!client.socket.destroyed)client.socket.write(frame({v:1,type:'event',event}));},
+  broadcast(event){for(const client of clients)if(client.authenticated&&!client.rejected&&!client.socket.destroyed)client.socket.write(frame({v:1,type:'event',event}));},
   async dispose(){if(disposed)return;closing=true;for(const client of clients)client.socket.destroy();await Promise.all([...operations]);await new Promise((resolve,reject)=>server.close(error=>error&&error.code!=='ERR_SERVER_NOT_RUNNING'?reject(error):resolve()));if(!descriptorRemoved){const saved=JSON.parse(await fs.readFile(descriptor,'utf8'));if(saved.nonce!==nonce)throw Error('Bridge ownership changed. Inspect the active record before retrying cleanup.');await fs.unlink(descriptor);descriptorRemoved=true;}try{await fs.unlink(socketPath);}catch(error){if(error.code!=='ENOENT')throw error;}disposed=true;}
  };
 }
