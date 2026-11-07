@@ -4,24 +4,16 @@ const {spawn,execFileSync}=require('node:child_process'),{once}=require('node:ev
 const {capture,captureTree,verifyStopped}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'),{cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
 const {createHash}=require('node:crypto');
 const {launchPackagedGuides,installNativeBridge}=require('./packaged-browser-app.cjs');
+const {crashHandlers,captureOwnedCrashHelpers}=require('./browser-crash-fixture.cjs');
 const identity=require('../extension/identities.json'),root=path.join(__dirname,'..'),suite=!!process.env.GUIDES_SUITE_EXECUTABLE_PATH,appExecutable=process.env.GUIDES_SUITE_EXECUTABLE_PATH||process.env.GUIDES_EXECUTABLE_PATH,packaged=!!appExecutable;
 const nativeMac=process.platform==='darwin'&&packaged,browserKind=process.env.GUIDES_TEST_BROWSER||'chrome';
 if(!['chrome','edge'].includes(browserKind))throw Error('This Chromium fixture supports Chrome and Edge only; use a real Firefox-specific connection fixture.');
-function crashHandlers(bundle){return bundle?execFileSync('/bin/ps',['-axo','pid=,comm='],{encoding:'utf8',timeout:5000}).split('\n').flatMap(line=>{const m=/^\s*(\d+)\s+(.+)$/.exec(line);return m&&m[2].startsWith(bundle+'/')&&path.basename(m[2]).endsWith('crashpad_handler')?[Number(m[1])]:[];}):[];}
 async function main(){
  if(packaged&&!nativeMac)throw Error('Packaged browser qualification currently requires the authorized Mac.');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-browser-')));let browserCrashBaseline=[],browserCrashOwned=[],browserBundle='',app,browser,child,server,debuggerSocket,proof,mixed,watchdog,candidate,suiteVersion,editor,illustration,owned=[],browserOwned=[],nativeOwned=[];
  const config=path.join(temporary,'config'),profile=path.join(temporary,'guides-profile'),chromeProfile=path.join(temporary,'chromium'),library=path.join(suite?path.join(profile,'tools/com.matiq.guides'):profile,'guides');
  watchdog=setTimeout(()=>{console.error('Browser journey timed out. Verify only its owned runtime cleanup.');if(child?.exitCode===null)child.kill('SIGTERM');if(app?.process().exitCode===null)app.process().kill('SIGTERM');},process.env.GUIDES_MIXED_NATIVE==='1'?180000:120000);
- function ownCrashHelpers(){
-  if(!nativeMac)return;
-  const peers=execFileSync('/usr/sbin/lsof',['-nP','-a','-p',String(process.pid),'-U'],{encoding:'utf8',timeout:5000}).split('\n').slice(1).map(line=>line.trim().split(/\s+/).at(-1)?.replace(/^->/,''));
-  for(const pid of crashHandlers(browserBundle).filter(pid=>!browserCrashBaseline.includes(pid)&&!browserCrashOwned.some(row=>row.pid===pid))){
-   let sockets;try{sockets=execFileSync('/usr/sbin/lsof',['-nP','-a','-p',String(pid),'-U'],{encoding:'utf8',timeout:5000});}catch(error){if(error.status===1){try{process.kill(pid,0);}catch(gone){if(gone.code==='ESRCH')continue;} }throw error;}
-   assert.ok(sockets.split('\n').slice(1).some(line=>{const fields=line.trim().split(/\s+/);return fields[3]?.startsWith('2')&&peers.includes(fields[5]);}),'A new browser crash helper has no owned parent stderr link. Leave it untouched and inspect ownership: '+pid);
-   const row=capture({pid});row.identity=execFileSync('/bin/ps',['-p',String(pid),'-o','uid=,lstart=,comm='],{encoding:'utf8',timeout:5000}).trim();browserCrashOwned.push(row);
-  }
- }
+ function ownCrashHelpers(){if(nativeMac)browserCrashOwned.push(...captureOwnedCrashHelpers({bundle:browserBundle,baseline:browserCrashBaseline,known:browserCrashOwned}));}
  try{
   const fixtureHTML=await fs.readFile(path.join(root,'test/browser-workflow.html'),'utf8');server=http.createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(fixtureHTML);});server.listen(0,'127.0.0.1');await once(server,'listening');const origin='http://127.0.0.1:'+server.address().port;
   if(nativeMac){({app,editor,candidate,suiteVersion}=await launchPackagedGuides({root,profile}));owned=captureTree(capture(app.process()));}
