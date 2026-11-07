@@ -30,7 +30,7 @@ async function main(){
   if(!suite)return page;
   await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Guides',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
   let tool;for(let i=0;i<200;i++){tool=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(tool)break;await new Promise(resolve=>setTimeout(resolve,50));}
-  assert.ok(tool,'The actual suite must open the installed isolated Guides workspace.');tool.setDefaultTimeout(15000);return tool;
+  if(!tool){console.error('Suite workspace diagnostic:',JSON.stringify({expectedDirectory:record.directory,pages:app.context().pages().map(p=>p.url()),contents:await app.evaluate(({webContents})=>webContents.getAllWebContents().map(c=>({type:c.getType(),url:c.getURL()}))),shell:await page.locator('body').innerText()}));}assert.ok(tool,'The actual suite must open the installed isolated Guides workspace.');tool.setDefaultTimeout(15000);return tool;
  }
  watchdog=setTimeout(()=>{if(app?.process().exitCode===null)app.process().kill('SIGTERM');if(fixture?.exitCode===null)fixture.kill('SIGTERM');},180000);
  try{
