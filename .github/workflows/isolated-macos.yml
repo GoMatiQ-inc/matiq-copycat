@@ -37,6 +37,7 @@ jobs:
           /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
           npm ci --no-audit --no-fund
           npm test
+          node scripts/electron-vm-preflight.cjs
           npm run test:desktop
           npm run tool:validate
           node <<'NODE'
