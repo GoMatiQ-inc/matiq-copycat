@@ -25,7 +25,8 @@
     "test:native-app": "node scripts/native-app-test.cjs",
     "release:candidate": "node scripts/release.cjs",
     "verify:release": "node scripts/verify-release.cjs",
-    "tool:package": "node scripts/package-tool.cjs"
+    "tool:package": "node scripts/package-tool.cjs",
+    "test:packaged-project": "node scripts/packaged-project-test.cjs"
   },
   "dependencies": {
     "@matiq-solutions/runtime": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-runtime-0.1.3.tgz",
