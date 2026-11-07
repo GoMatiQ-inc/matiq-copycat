@@ -55,8 +55,7 @@ async function main(){
    for(const file of files){const expected=execFileSync('git',['show',candidate.commit+':'+file],{cwd:root});const actual=suite?await fs.readFile(path.join(record.directory,file)):await asar.extractFile(archive,file);if(file==='package.json'){const a=JSON.parse(actual),e=JSON.parse(expected);for(const key of ['name','version','main','license','dependencies'])assert.deepEqual(a[key],e[key],'Packaged runtime metadata differs: '+key);}else assert.ok(actual.equals(expected),'Packaged resource differs from its recorded source: '+file);}
    for(const name of ['sdk','runtime','shell'])assert.equal(JSON.parse((suite?await fs.readFile(path.join(record.directory,'node_modules/@matiq-solutions/'+name+'/package.json')):await asar.extractFile(archive,'node_modules/@matiq-solutions/'+name+'/package.json')).toString()).version,'0.1.3');
   }
-  const binary=path.join(temporary,'GuidesNativeFixture'),cache=path.join(temporary,'modules');
-  execFileSync('xcrun',['swiftc','-O','-target','arm64-apple-macos14.2','-module-cache-path',cache,path.join(root,'test/CaptureFixture.swift'),'-o',binary],{timeout:120000,stdio:'pipe'});
+  const binary=require('./native-fixture.cjs').buildNativeFixture({root,temporary});
   fixture=spawn(binary,[],{stdio:['pipe','pipe','ignore']});fixtureOwned=captureTree(capture(fixture));
   const messages=[],waiting=[];let tail='';
   fixture.stdout.on('data',chunk=>{tail+=chunk.toString();let i;while((i=tail.indexOf('\n'))>=0){const line=tail.slice(0,i);tail=tail.slice(i+1);const value=JSON.parse(line);if(waiting.length)waiting.shift()(value);else messages.push(value);}});

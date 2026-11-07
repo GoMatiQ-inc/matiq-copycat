@@ -5,7 +5,7 @@ from pathlib import Path
 
 root=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else Path(__file__).resolve().parents[1]
 binary=root/'native/guides-capture'
-fixture=root/'native/GuidesNativeFixture'
+fixture=Path(os.environ['GUIDES_NATIVE_FIXTURE'])
 children=[]
 def watchdog(signum,frame): raise TimeoutError('Native capture fixture exceeded 60 seconds; inspect cleanup evidence.')
 signal.signal(signal.SIGALRM,watchdog);signal.alarm(60)
