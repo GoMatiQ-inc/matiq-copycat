@@ -32,7 +32,7 @@ On the authorized Mac, reserve storage and run:
 
 The fixture contains only controlled data. It tests JPEG capture, real control labels without field values in event text, target alignment, window movement, selected process identity, exclusion of a second same-app window, explicit monitor stop/restart, parent-pipe closure and selected application closure. The fixture and test launcher are not packaged.
 
-The native component evidence is from macOS 27.0.1 arm64, not from installed standalone/suite bundles. Fresh TCC attribution for signed bundles, complete mixed capture in both packaged forms, actual permission denial/revocation, physical display changes, sleep and all release/update acceptance remain outstanding. Do not infer those passes from this component fixture.
+That component receipt is from macOS 27.0.1 arm64 and does not by itself qualify an installed bundle. Signed application and mixed-capture evidence is recorded below. Fresh TCC setup/denial/revocation, physical display changes, sleep and full release/update acceptance remain outstanding.
 
 
 ## Signed mixed workflow and current candidate

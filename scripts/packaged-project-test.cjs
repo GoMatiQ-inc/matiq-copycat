@@ -90,8 +90,12 @@ async function main(){
   await fs.mkdir(path.join(root,'.validation'),{recursive:true});await inspect.screenshot({path:path.join(root,'.validation/packaged-html-export.png'),fullPage:true});await fs.copyFile(path.join(temporary,'pdf-preview.png'),path.join(root,'.validation/packaged-pdf-export.png'));for(const name of (await fs.readdir(temporary)).filter(name=>name.startsWith('pdf-preview.png.page-')))await fs.copyFile(path.join(temporary,name),path.join(root,'.validation/packaged-pdf-export-'+name.slice('pdf-preview.png.'.length)));
  }catch(error){console.error('Packaged project journey failed:',error.message);if(app)for(const p of app.context().pages())console.error('Owned workspace:',p.url(),(await p.locator('body').innerText().catch(()=>'' )).slice(-1200));throw error;}finally{
   if(app)owned=Array.from(new Map([...owned,...captureTree(capture(app.process()))].map(row=>[row.pid,row])).values());
-  if(server){crashOwned.push(...captureOwnedCrashHelpers({bundle:browserBundle,baseline:crashBaseline,known:crashOwned}));browserOwned=Array.from(new Map([...browserOwned,...captureTree(capture(server.process())),...crashOwned].map(row=>[row.pid,row])).values());}
-  try{await cleanupDesktop({app,owned});}finally{try{await cleanupDesktop({app:server?{process:()=>server.process(),close:async()=>{await browser?.close();await server.close();}}:null,owned:browserOwned,temporary,watchdog});}finally{for(const stream of [server?.process().stdout,server?.process().stderr])stream?.destroy();}}
+  const cleanupErrors=[];
+  if(server){try{crashOwned.push(...captureOwnedCrashHelpers({bundle:browserBundle,baseline:crashBaseline,known:crashOwned}));}catch(error){cleanupErrors.push(error);}browserOwned=Array.from(new Map([...browserOwned,...captureTree(capture(server.process())),...crashOwned].map(row=>[row.pid,row])).values());}
+  try{await cleanupDesktop({app,owned});}catch(error){cleanupErrors.push(error);}
+  try{await cleanupDesktop({app:server?{process:()=>server.process(),close:async()=>{await browser?.close();await server.close();}}:null,owned:browserOwned,watchdog});}catch(error){cleanupErrors.push(error);}finally{for(const stream of [server?.process().stdout,server?.process().stderr])stream?.destroy();}
+  if(cleanupErrors.length)throw new AggregateError(cleanupErrors,'Export qualification cleanup failed. Owned cleanup was attempted; inspect unknown processes and retained fixture files.');
+  await fs.rm(temporary,{recursive:true,force:true});
  }
  if(proof){proof.cleanup='owned processes and listeners verified absent';await fs.writeFile(path.join(root,'.validation/packaged-project-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log('PASS: actual signed packaged cross-form project round-trip and independent documentation inspection; owned cleanup verified.');}
 }
