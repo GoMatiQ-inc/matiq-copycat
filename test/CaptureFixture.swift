@@ -53,12 +53,14 @@ FileHandle.standardInput.readabilityHandler={ handle in
   else if command.contains("click"){
    app.activate(ignoringOtherApps:true)
    let r=screen(button.frame),p=CGPoint(x:r.midX,y:r.midY)
+   DispatchQueue.main.asyncAfter(deadline:.now()+0.25){
    output(["type":"click-sent","focused":NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier])
    let source=CGEventSource(stateID:.hidSystemState)
    CGEvent(mouseEventSource:source,mouseType:.mouseMoved,mouseCursorPosition:p,mouseButton:.left)!.post(tap:.cgSessionEventTap)
    CGEvent(mouseEventSource:source,mouseType:.leftMouseDown,mouseCursorPosition:p,mouseButton:.left)!.post(tap:.cgSessionEventTap)
    DispatchQueue.main.asyncAfter(deadline:.now()+0.1){
     CGEvent(mouseEventSource:source,mouseType:.leftMouseUp,mouseCursorPosition:p,mouseButton:.left)!.post(tap:.cgSessionEventTap)
+   }
    }
   }
  }
