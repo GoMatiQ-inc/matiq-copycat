@@ -92,19 +92,23 @@ async function atomicWrite(file,project) {await atomicBytes(file,JSON.stringify(
 
 async function lock(file) {
   const lockPath=file+'.lock',owner={host:os.hostname(),pid:process.pid,token:randomUUID()},body=JSON.stringify(owner);
+  const parent=path.dirname(file),directory=await fs.stat(parent,{bigint:true});async function checkDirectory(){const current=await fs.stat(parent,{bigint:true});if(current.dev!==directory.dev||current.ino!==directory.ino)throw Error('The project destination folder changed. Reconnect its original storage and retry ownership cleanup.');}
   async function attempt(){const handle=await fs.open(lockPath,'wx',0o600);try{await handle.writeFile(body);}finally{await handle.close();}}
+  async function readRecord(){let handle;try{handle=await fs.open(lockPath,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);}catch(error){if(['ELOOP','EMLINK'].includes(error.code))throw Error('Project ownership record is damaged. Inspect its lock before retrying; do not remove an unknown owner.');throw error;}try{const info=await handle.stat();if(!info.isFile()||info.size>4096)throw Error('Project ownership record is damaged. Inspect its lock before retrying; do not remove an unknown owner.');const bytes=Buffer.alloc(4097),{bytesRead}=await handle.read(bytes,0,bytes.length,0);if(bytesRead>4096)throw Error('Project ownership record exceeds its limit. Inspect its lock before retrying.');return bytes.subarray(0,bytesRead).toString('utf8');}finally{await handle.close();}}
+
   try {await attempt();}catch(e){
     if(e.code!=='EEXIST')throw e;
     // An abandoned lock is recoverable only on the same host with a positively dead PID.
     const recovery=lockPath+'.recovery';let guard;
-    try {guard=await fs.open(recovery,'wx',0o600);}catch{throw Error('Project recovery is already in progress. Retry after it finishes.');}
+    try {guard=await fs.open(recovery,'wx',0o600);}catch{throw Error('Project ownership recovery is unavailable. Check storage access and any other recovery process before retrying.');}
     try {
-      const previous=JSON.parse(await fs.readFile(lockPath,'utf8'));
+      let previous;try{previous=JSON.parse(await readRecord());}catch(error){if(!(error instanceof SyntaxError))throw error;throw Error('Project ownership record is damaged. Restore a verified ownership record before retrying.');}
+      if(!previous||typeof previous!=='object'||Array.isArray(previous))throw Error('Project ownership record is damaged. Inspect its lock before retrying.');
       if(previous.host!==os.hostname() || !Number.isSafeInteger(previous.pid) || previous.pid<1)throw Error('Project is owned by another or unknown host. Close that writer before opening.');
       try{process.kill(previous.pid,0);throw Error('Project is already open. Close its other window before editing.');}catch(error){if(error.code!=='ESRCH')throw error;}
       await fs.unlink(lockPath);await attempt();
     } finally {await guard.close();await fs.unlink(recovery);}
   }
-  return async()=>{const current=await fs.readFile(lockPath,'utf8');if(current!==body)throw Error('Project ownership changed. Keep the project open and investigate its lock before retrying closure.');await fs.unlink(lockPath);};
+  return async()=>{await checkDirectory();let current;try{current=await readRecord();}catch(error){if(error.code==='ENOENT'){await checkDirectory();return;}throw error;}if(current!==body)throw Error('Project ownership changed. Keep the project open and investigate its lock before retrying closure.');await checkDirectory();await fs.unlink(lockPath);};
 }
 module.exports={create,step,validate,rect,image,hash,addImage,read,atomicWrite,atomicBytes,lock,compact,clone,MAX_BYTES};

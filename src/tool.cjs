@@ -8,14 +8,15 @@ const P = require('./project.cjs');
 const {documentation,markdown,exportRequest,warningSteps}=require('./export.cjs');
 exports.activate = async host => {
   const library=path.join(host.dataDir,'guides');await fs.mkdir(library,{recursive:true,mode:0o700});
-  let current=null,file=null,release=null,dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
+  let current=null,file=null,release=null,exportUnlock=null,exportFailure='',dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
   const windows=new Set();let bridge=null,browserOwner=null,finishPending=false,stateRevision=0,pendingInterruption=null,quiesce=null;
   let desktopChoices=[],desktop=null,desktopQueue=Promise.resolve(),desktopAccepting=false,desktopCutoff=0,desktopInterrupting=null,desktopPending=0,desktopPendingBytes=0;
   const desktopLimits={steps:4,bytes:3*1024*1024};
   const activeCapture=()=>current?.capture&&['recording','paused'].includes(current.capture.phase);
-  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure,desktop:{active:!!desktop,accepting:desktopAccepting,pending:desktopPending,bytes:desktopPendingBytes,limits:desktopLimits},bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
+  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure||exportFailure,exportCleanup:!!exportUnlock&&!!exportFailure,desktop:{active:!!desktop,accepting:desktopAccepting,pending:desktopPending,bytes:desktopPendingBytes,limits:desktopLimits},bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
   const notify=()=>{host.emit('com.matiq.guides:state',snapshot());bridge?.broadcast({type:'status',status:browserStatus()});};
   function browserStatus(){return {revision:stateRevision,receiver:bridge?.receiver,instance:app.getName(),guide:current?{id:current.guide.id,title:current.guide.title}:null,capture:current?.capture?.source==='desktop'?null:current?.capture||null,finishPending};}
+  async function cleanupExport(){if(!exportUnlock)return;try{await exportUnlock();exportUnlock=null;exportFailure='';}catch(error){exportFailure='Export destination cleanup failed ('+(error.code||'ownership changed')+'). Reconnect its storage or resolve its ownership record, then choose Retry export cleanup. Your local guide remains saved.';throw Error(exportFailure);}}
   async function captureWrite(next){saveState='saving';notify();try{await P.atomicWrite(file,next);current=next;stateRevision++;saveState='saved';dirty=false;failure='';notify();}catch(error){saveState='failed';failure='Capture was not saved. Reconnect and retry the pending step: '+error.message;notify();throw Error(failure);}}
   async function captureControl(command,reason=''){if(command==='stop'||command==='cancel')finishPending=false;if(!current)throw Error('Create or open a guide first.');await captureWrite(command==='start'?C.begin(current):C.transition(current,command,reason));return snapshot();}
   async function endWork(){working=false;const reason=pendingInterruption;pendingInterruption=null;if(reason&&activeCapture()){working=true;try{await captureWrite(current.capture.phase==='recording'?C.transition(current,'pause',reason):C.warn(current,reason));}finally{working=false;}}}
@@ -31,6 +32,7 @@ exports.activate = async host => {
         if(message.type==='select'){if(message.receiver!==bridge.receiver)throw Error('Choose the currently displayed receiving instance.');if(browserOwner&&browserOwner!==client)throw Error('Another browser owns this capture. Stop or disconnect it before selecting this browser.');browserOwner=client;notify();return browserStatus();}
         if(browserOwner!==client||message.receiver!==bridge.receiver)throw Error('Select this receiving instance explicitly before recording.');
         if(activeCapture()&&current.capture.source==='desktop')throw Error('Desktop capture owns this guide. Stop it in Guides before recording browser actions.');
+        if(exportUnlock)throw Error('Retry export cleanup in Guides before recording.');
         if(working)throw Error('Guides is saving or awaiting a dialog. Retry the unacknowledged action shortly.');working=true;
         try{
           if(message.type==='start'){if(dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Save the current guide before starting capture.');if(!current)throw Error('Create or open a guide in the desktop app first.');const origin=new URL(message.origin);if(!['https:','http:'].includes(origin.protocol)||origin.origin!==message.origin)throw Error('Select a normal HTTP(S) browser page.');const approval=await dialog.showMessageBox(host.window,{type:'question',message:'Record this browser workflow?',detail:`Append steps from the selected tab at ${origin.origin} to “${current.guide.title}”. Screenshots may contain sensitive information. Review and redact before sharing.`,buttons:['Cancel','Start capture'],cancelId:0,defaultId:0});if(approval.response!==1)throw Error('Capture was not started.');if(client.socket.destroyed||browserOwner!==client)throw Error('The browser disconnected before approval. Capture did not start; reconnect and try again.');await captureControl('start');await endWork();return browserStatus();}
@@ -123,9 +125,11 @@ exports.activate = async host => {
   host.handle('com.matiq.guides:request',async(name,args)=>{
     if(disposed||disposing)throw Error('Reopen Guides before continuing.');
     if(name==='state')return snapshot();
+    if(exportUnlock&&!['export-cleanup','export'].includes(name))throw Error('Retry export cleanup before continuing.');
     if(name==='dirty'){if(activeCapture())throw Error('Stop capture before editing steps.');dirty=true;saveState='unsaved';return;}
     if(working)throw Error('Wait for the current operation to finish.');working=true;
     try {
+      if(name==='export-cleanup'){await cleanupExport();return snapshot();}
       if(name==='bridge-enable'){await enableBridge();return snapshot();}
       if(name==='bridge-install'){return require('./bridge-install.cjs').install({host,browser:args});}
       if(name==='desktop-list'){
@@ -186,12 +190,15 @@ exports.activate = async host => {
         if(decoded.isEmpty()||size.width*size.height>32000000)throw Error('Choose a valid screenshot under 32 megapixels.');return {key:P.hash(bytes),asset};
       }
       if(name==='export'){
+        await cleanupExport();
         if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Save the guide before exporting.');const format=exportRequest(current,args,stateRevision);
         const extension={html:'html',markdown:'md',pdf:'pdf',editable:'mqguide',sanitized:'mqguide'}[format];
         const choice=await dialog.showSaveDialog(host.window,{defaultPath:'Guide.'+extension,filters:[{name:'Guide export',extensions:[extension]}]});if(choice.canceled)return {canceled:true};
         const target=choice.filePath,canonicalParent=await fs.realpath(path.dirname(target));
         for(const root of [...host.protectedRoots,path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge')]){let base;try{base=await fs.realpath(root);}catch(error){if(error.code==='ENOENT')continue;throw error;}const relative=path.relative(base,path.join(canonicalParent,path.basename(target)));if(relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('Choose an export destination outside application resources and managed data.');}
         try{const existing=await fs.lstat(target);if(existing.isSymbolicLink()||!existing.isFile())throw Error('Choose a regular destination file, not a symbolic link or directory.');}catch(error){if(error.code!=='ENOENT')throw error;}
+        exportUnlock=await P.lock(target);
+        try{
         if(format==='editable'||format==='sanitized'){await P.atomicWrite(target,format==='editable'?current:await flattened(true));return {saved:true};}
         const flat=await flattened(),warnings=current.capture?.issues||[];
         if(format==='html'){await P.atomicBytes(target,documentation(flat,warnings));return {saved:true};}
@@ -201,16 +208,18 @@ exports.activate = async host => {
         }
         const output=new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});windows.add(output);
         try{output.webContents.setWindowOpenHandler(()=>({action:'deny'}));await output.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(documentation(flat,warnings)));await output.webContents.executeJavaScript('Promise.all(Array.from(document.images,image=>image.decode()))');await P.atomicBytes(target,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));return {saved:true};}finally{output.destroy();windows.delete(output);}
+        }finally{await cleanupExport();}
       }
       throw Error('Unknown Guides command. Reopen the workspace and retry.');
     }finally{await endWork();}
   });
   await host.view.webContents.loadFile(path.join(host.resourceDir,'src/index.html'));
   return {
-    async status(){if(disposed)return {busy:false};const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');return {busy:working||dirty||rendererDirty||!!activeCapture()||saveState==='failed',reason:activeCapture()?'Stop or cancel the current capture before closing or restarting.':saveState==='failed'?'Retry the failed save before closing.':working?'Finish the current Guides save, dialog or export.':dirty||rendererDirty?'Save the current guide before closing or restarting.':'',background:!!activeCapture()};},
+    async status(){if(disposed)return {busy:false};const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');return {busy:working||dirty||rendererDirty||!!activeCapture()||!!exportUnlock||saveState==='failed',reason:activeCapture()?'Stop or cancel the current capture before closing or restarting.':saveState==='failed'?'Retry the failed save before closing.':working?'Finish the current Guides save, dialog or export.':exportUnlock?'Retry export destination cleanup before closing or restarting.':dirty||rendererDirty?'Save the current guide before closing or restarting.':'',background:!!activeCapture()};},
     async dispose(){
       if(disposed)return;
       if(working)throw Error('Wait for the current save or native dialog to finish, then retry closing Guides.');
+      await cleanupExport();
       disposing=true;
       try{
         await stopDesktop();if(desktopInterrupting)await desktopInterrupting;
