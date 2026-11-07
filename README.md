@@ -4,7 +4,7 @@ Local illustrated workflow documentation, using the MatiQ Solutions desktop SDK 
 
 ## Delivery state
 
-Development implementation. No target, capture adapter, extension, signed release, marketplace installation or update journey is qualified yet. The current implementation includes local manual editing, export paths and a shared browser companion/native bridge. A real Chromium development journey and the compiled macOS bridge component have passed targeted checks; packaged browser/native workflows remain unqualified. Selected-window desktop capture is implemented with a native ScreenCaptureKit/Accessibility helper; its macOS component fixture is separate from the still-outstanding full packaged application journey. Do not infer product readiness from unit tests or the SDK-generated foundation.
+Unpublished development candidates. Signed/notarized macOS arm64 standalone and signed suite packages are built from one implementation. Actual Chrome, Edge and Firefox controlled capture journeys pass in both forms with desktop 0.1.1 and extension 0.1.3. Desktop 0.1.2/source d582c20 also passes actual Chrome-to-TextEdit mixed capture in both signed forms, plus native controls, editing/redaction, persistence and slow-storage pressure. Actual captured mixed projects round-trip through suite and standalone with stable identities and image bytes. These controlled baselines do not complete the acceptance matrix: fresh OS permissions, broader browser/recovery/offline cases, competing writers, marketplace installation, independently released updates and signed extension distribution remain open. See the detailed evidence and limits below; no public availability is claimed.
 
 ## Develop
 
