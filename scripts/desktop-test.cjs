@@ -57,7 +57,7 @@ async function main(){
   assert.equal(JSON.parse(await fs.readFile(guideFile+'.draft')).guide.steps[0].notes,'Recovered interrupted edit');
   owned=captureTree(capture(app.process())).map(row=>({...row,identity:execFileSync('/bin/ps',['-p',String(row.pid),'-o','uid=,lstart=,comm='],{encoding:'utf8'}).trim()}));
   const exited=once(app.process(),'exit');app.process().kill('SIGKILL');await exited;
-  await cleanupDesktop({app,owned});app=null;owned=[];
+  app=null;await cleanupDesktop({owned});owned=[];
   page=await launch();await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});
   await page.getByRole('button',{name:/Offline onboarding/}).click();await page.waitForFunction(()=>document.querySelector('#notes').value==='Recovered interrupted edit');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Recovered interrupted edit');
   assert.equal(await page.locator('#save-state').innerText(),'Unsaved');
