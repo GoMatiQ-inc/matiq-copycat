@@ -6,6 +6,7 @@ function canonical(file){try{return nodeFs.realpathSync(file);}catch(error){if(e
 function identity(pid){try{return execFileSync('/bin/ps',['-p',String(pid),'-o','uid=,lstart=,comm='],{encoding:'utf8',timeout:5000}).trim();}catch(error){if(error.status===1)return null;throw error;}}
 async function exists(file){try{await fs.lstat(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin');for(const key of ['GUIDES_UPDATE_BASELINE_DIR','GUIDES_UPDATE_SUCCESSOR_DIR','GUIDES_MIXED_PROJECT'])assert.ok(process.env[key],'Supply '+key+' for actual signed native update qualification.');
  const baseline=await fs.realpath(process.env.GUIDES_UPDATE_BASELINE_DIR),successor=await fs.realpath(process.env.GUIDES_UPDATE_SUCCESSOR_DIR),old=JSON.parse(await fs.readFile(path.join(baseline,'mac-signature.json'))),next=JSON.parse(await fs.readFile(path.join(successor,'mac-signature.json')));
  assert.equal(old.sdk,'0.1.3');assert.equal(next.sdk,'0.1.3');assert.equal(old.electron,'45.2.3');assert.equal(next.electron,'45.2.3');assert.notEqual(old.version,next.version);assert.notEqual(old.commit,next.commit);

@@ -6,6 +6,7 @@ const {cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
 const {once}=require('node:events');
 const root=path.join(__dirname,'..'),suite=!!process.env.GUIDES_SUITE_EXECUTABLE_PATH,executable=process.env.GUIDES_SUITE_EXECUTABLE_PATH||process.env.GUIDES_EXECUTABLE_PATH;
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  if(process.platform!=='darwin')throw Error('Run the real native app journey on the authorized Mac.');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-native-app-'))),profile=path.join(temporary,'profile');
  let app,fixture,owned=[],fixtureOwned=[],watchdog,proof,candidate,record,suiteVersion;

@@ -1,3 +1,4 @@
+require('./native-test-isolation.cjs').assertNativeTestIsolation();
 const {execFileSync}=require('node:child_process');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 if(process.platform!=='darwin')throw Error('Run the native capture fixture on the authorized macOS host.');

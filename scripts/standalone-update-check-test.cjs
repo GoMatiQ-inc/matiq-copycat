@@ -1,6 +1,7 @@
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),http=require('node:http'),assert=require('node:assert/strict'),{once}=require('node:events'),{execFileSync}=require('node:child_process');
 const {launchPackagedGuides}=require('./packaged-browser-app.cjs'),{capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'),{cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin');const root=path.join(__dirname,'..'),temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-update-check-'))),profile=path.join(temporary,'profile');
  let app,child,owned=[],server,port,held=[],proof,diagnostics='',mode='hold',trafficViolation='',timedOut=false;const traffic=[];
  const watchdog=setTimeout(()=>{timedOut=true;if(child?.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');server?.closeAllConnections();},100000);

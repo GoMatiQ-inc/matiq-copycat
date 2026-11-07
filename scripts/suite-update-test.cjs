@@ -5,6 +5,7 @@ const {capture,captureTree,verifyStopped}=require('@matiq-solutions/sdk/fixture-
 const root=path.join(__dirname,'..'),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 function processIdentity(pid){try{return execFileSync('/bin/ps',['-p',String(pid),'-o','uid=,lstart=,comm='],{encoding:'utf8',timeout:5000}).trim();}catch(error){if(error.status===1)return null;throw error;}}
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin');for(const key of ['GUIDES_SUITE_EXECUTABLE_PATH','GUIDES_SUITE_PACKAGE','GUIDES_CANDIDATE_PROOF','GUIDES_UPDATE_PACKAGE','GUIDES_UPDATE_PROOF','GUIDES_MIXED_PROJECT'])assert.ok(process.env[key],'Supply '+key+' for real signed candidate update qualification.');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-update-'))),profile=path.join(temporary,'suite'),suiteExecutable=process.env.GUIDES_SUITE_EXECUTABLE_PATH,archive=path.join(path.dirname(path.dirname(suiteExecutable)),'Resources/app.asar'),suiteBefore=hash(await fs.readFile(archive));
  let launched,browser,newRoot,newOwned=[],oldOwned=[],oldPid=null,oldChild=null,oldCleaned=false,proof,restartRequested=false;

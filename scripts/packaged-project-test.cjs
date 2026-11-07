@@ -5,6 +5,7 @@ const {capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'
 const {cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
 const root=path.join(__dirname,'..'),{crashHandlers,captureOwnedCrashHelpers}=require('./browser-crash-fixture.cjs'),browserBundle='/Applications/Google Chrome.app';
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  if(process.platform!=='darwin')throw Error('Run packaged cross-form qualification on the authorized Mac.');
  const candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
  assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');

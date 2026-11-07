@@ -4,6 +4,7 @@ import base64, hashlib, json, os, platform, queue, signal, subprocess, sys, thre
 from pathlib import Path
 
 root=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else Path(__file__).resolve().parents[1]
+subprocess.run(['node','-e',"require(process.argv[1]).assertNativeTestIsolation()",str(root/'scripts/native-test-isolation.cjs')],check=True)
 binary=root/'native/guides-capture'
 fixture=Path(os.environ['GUIDES_NATIVE_FIXTURE'])
 children=[]

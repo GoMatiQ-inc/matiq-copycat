@@ -6,6 +6,7 @@ const {execFileSync}=require('node:child_process');
 const {once}=require('node:events');
 const root=path.join(__dirname,'..');
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'matiq-guides-ui-'));let app,owned=[],watchdog;
  const profile=path.join(temporary,'profile');
  async function launch(){

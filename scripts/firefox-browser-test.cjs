@@ -4,6 +4,7 @@ const {capture,captureTree,verifyStopped}=require('@matiq-solutions/sdk/fixture-
 const {launchPackagedGuides,installNativeBridge}=require('./packaged-browser-app.cjs');
 const root=path.join(__dirname,'..'),elementKey='element-6066-11e4-a52e-4f735466cecf';
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin','Run actual packaged Firefox qualification on the authorized Mac.');
  assert.ok(process.env.GUIDES_GECKODRIVER,'Supply the verified test-only GUIDES_GECKODRIVER executable.');
  const driverPath=process.env.GUIDES_GECKODRIVER,driverVersion=execFileSync(driverPath,['--version'],{encoding:'utf8',timeout:10000}).split('\n')[0];assert.ok(driverVersion.startsWith('geckodriver 0.37.1 '),'Requalify a different Firefox driver before using it as release evidence.');

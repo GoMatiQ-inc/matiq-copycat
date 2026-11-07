@@ -1,0 +1,60 @@
+name: Isolated macOS SDK regression
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'native/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package*.json'
+      - 'matiq-tool.json'
+      - '.github/workflows/isolated-macos.yml'
+permissions:
+  contents: read
+concurrency:
+  group: guides-isolated-macos-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  sdk-desktop:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on:
+      group: MatiQ Mac CI
+      labels: [self-hosted, macOS, ARM64, matiq-mac-mini]
+    timeout-minutes: 20
+    env:
+      GUIDES_NATIVE_TEST_VM: tart
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify VM isolation before installing or opening anything
+        run: node -e "require('./scripts/native-test-isolation.cjs').assertNativeTestIsolation()"
+      - name: Qualified SDK desktop regression in the guest
+        shell: bash
+        run: |
+          /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
+          npm ci --no-audit --no-fund
+          npm test
+          npm run test:desktop
+          npm run tool:validate
+          node <<'NODE'
+          const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
+          const proof={passed:true,scope:'SDK development desktop regression inside the authorized Tart guest; not packaged capture or complete acceptance',sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),node:process.version,arch:process.arch,macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,electron:require('electron/package.json').version,cleanup:'Desktop fixture independently verified owned process/listener absence.'};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'matiq-guides-isolated-sdk-proof.json'),JSON.stringify(proof,null,2)+'\n');
+          NODE
+          SCRIPT
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: isolated-macos-sdk-proof
+          path: ${{ runner.temp }}/matiq-guides-isolated-sdk-proof.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retire the successful job dependency tree
+        if: success()
+        shell: bash
+        run: |
+          test -d node_modules
+          test ! -L node_modules
+          rm -rf -- node_modules

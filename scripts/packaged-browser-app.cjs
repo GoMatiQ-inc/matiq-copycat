@@ -2,6 +2,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
 const { _electron:electron }=require('playwright');
 const {capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'),{cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
 async function launchPackagedGuides({root,profile,openWorkspace=true,suite=!!process.env.GUIDES_SUITE_EXECUTABLE_PATH}){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin','Use the authorized Mac for actual packaged browser qualification.');
  const executable=suite?process.env.GUIDES_SUITE_EXECUTABLE_PATH:process.env.GUIDES_EXECUTABLE_PATH,candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
  assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);assert.ok(executable);

@@ -9,6 +9,7 @@ const identity=require('../extension/identities.json'),root=path.join(__dirname,
 const nativeMac=process.platform==='darwin'&&packaged,browserKind=process.env.GUIDES_TEST_BROWSER||'chrome';
 if(!['chrome','edge'].includes(browserKind))throw Error('This Chromium fixture supports Chrome and Edge only; use a real Firefox-specific connection fixture.');
 async function main(){
+ require('./native-test-isolation.cjs').assertNativeTestIsolation();
  if(packaged&&!nativeMac)throw Error('Packaged browser qualification currently requires the authorized Mac.');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-browser-')));let browserCrashBaseline=[],browserCrashOwned=[],browserBundle='',app,appChild,browser,child,server,debuggerSocket,proof,mixed,watchdog,candidate,suiteVersion,editor,illustration,owned=[],browserOwned=[],nativeOwned=[],frameFocusRecovery=false;
  const config=path.join(temporary,'config'),profile=path.join(temporary,'guides-profile'),chromeProfile=path.join(temporary,'chromium'),library=path.join(suite?path.join(profile,'tools/com.matiq.guides'):profile,'guides');
