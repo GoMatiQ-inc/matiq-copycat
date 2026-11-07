@@ -29,6 +29,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Verify VM isolation before installing or opening anything
         run: node -e "require('./scripts/native-test-isolation.cjs').assertNativeTestIsolation()"
       - name: Qualified SDK desktop regression in the guest
@@ -46,10 +47,16 @@ jobs:
           fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'matiq-guides-isolated-sdk-proof.json'),JSON.stringify(proof,null,2)+'\n');
           NODE
           SCRIPT
+      - name: Signed standalone and suite project qualification in the guest
+        env:
+          GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
+        run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- node scripts/packaged-vm-project.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: isolated-macos-sdk-proof
-          path: ${{ runner.temp }}/matiq-guides-isolated-sdk-proof.json
+          name: isolated-macos-proof
+          path: |
+            ${{ runner.temp }}/matiq-guides-isolated-sdk-proof.json
+            ${{ runner.temp }}/matiq-guides-packaged-vm-proof.json
           if-no-files-found: error
           retention-days: 7
       - name: Retire the successful job dependency tree
