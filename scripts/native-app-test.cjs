@@ -16,7 +16,7 @@ async function main(){
   owned=await runtimeRows();const exited=once(app.process(),'exit');let timer;
   await app.evaluate(({app})=>{setTimeout(()=>app.quit(),50);});
   try{await Promise.race([exited,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('The native app did not exit after its normal quit request.')),10000);})]);}finally{clearTimeout(timer);}
-  await cleanupDesktop({app,owned});app=null;owned=[];
+  app=null;await cleanupDesktop({owned});owned=[];
  }
  async function launch(){
   app=await electron.launch({...(executable?{executablePath:executable,args:['--user-data-dir='+profile]}:{args:[path.join(root,'test/fixture-main.cjs'),root,profile]}),timeout:20000});

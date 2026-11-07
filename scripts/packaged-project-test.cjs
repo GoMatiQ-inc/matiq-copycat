@@ -16,7 +16,7 @@ async function main(){
   owned=captureTree(capture(app.process()));const exited=once(app.process(),'exit');let timer;
   await app.evaluate(({app})=>{setTimeout(()=>app.quit(),50);});
   try{await Promise.race([exited,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Packaged app refused normal exit; inspect saved work and busy state.')),10000);})]);}finally{clearTimeout(timer);}
-  await cleanupDesktop({app,owned});app=null;owned=[];
+  app=null;await cleanupDesktop({owned});owned=[];
  }
  async function launch(suite,label){
   const profile=path.join(temporary,label);await fs.mkdir(profile);
