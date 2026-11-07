@@ -1,0 +1,25 @@
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const {spawn,execFileSync}=require('node:child_process'),{once}=require('node:events');
+const {capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'),{cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
+async function main(){
+ if(process.platform!=='darwin')throw Error('Run the real installed Firefox UI probe on the authorized Mac.');
+ const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-firefox-')));let driver,owned=[],watchdog,session,endpoint,driverPort;
+ async function request(method,route,body){const response=await fetch(endpoint+route,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(45000)}),result=await response.json();if(!response.ok||result.value?.error)throw Error('Firefox WebDriver '+route+': '+JSON.stringify(result.value));return result.value;}
+ watchdog=setTimeout(()=>{if(driver?.exitCode===null)driver.kill('SIGTERM');},90000);
+ try{
+  driver=spawn(process.env.GUIDES_GECKODRIVER,['--host','127.0.0.1','--port','0','--allow-system-access','--profile-root',temporary],{stdio:['ignore','pipe','pipe']});owned=captureTree(capture(driver));let logs='';driver.stdout.on('data',part=>{logs=(logs+part.toString()).slice(-6000);});driver.stderr.on('data',part=>{logs=(logs+part.toString()).slice(-6000);});
+  for(let i=0;i<200;i++){const match=logs.match(/Listening on (127\.0\.0\.1:\d+)/);if(match){endpoint='http://'+match[1];driverPort=Number(match[1].split(':')[1]);break;}if(driver.exitCode!==null)throw Error('The owned driver exited: '+logs);await new Promise(r=>setTimeout(r,50));}assert.ok(endpoint,'The owned Firefox driver did not expose its loopback endpoint.');
+  const value=await request('POST','/session',{capabilities:{alwaysMatch:{browserName:'firefox',acceptInsecureCerts:false,'moz:firefoxOptions':{binary:'/Applications/Firefox.app/Contents/MacOS/firefox',args:['-no-remote'],prefs:{'browser.aboutwelcome.enabled':false,'browser.shell.checkDefaultBrowser':false,'browser.startup.homepage':'about:blank','browser.newtabpage.enabled':false,'datareporting.policy.dataSubmissionEnabled':false,'toolkit.telemetry.enabled':false}}}}});session=value.sessionId;owned=captureTree(capture(driver));assert.ok(owned.some(row=>row.pid===value.capabilities['moz:processID']),'Track the real owned Firefox PID.');
+  console.log('Actual Firefox:',value.capabilities.browserVersion);
+  const id=await request('POST','/session/'+session+'/moz/addon/install',{path:path.join(__dirname,'../extensions-dist/matiq-guides-firefox-0.1.2.zip'),temporary:true});assert.equal(id,'guides@matiqinc.com');
+  await request('POST','/session/'+session+'/moz/context',{context:'chrome'});
+  const state=await request('POST','/session/'+session+'/execute/sync',{script:"return {url:location.href,buttons:Array.from(document.querySelectorAll('toolbarbutton')).filter(b=>/extension|guides/i.test(b.id)).map(b=>({id:b.id,label:b.getAttribute('label'),hidden:b.hidden,width:b.getBoundingClientRect().width})),panels:Array.from(document.querySelectorAll('panel')).filter(p=>/extension|addon/.test(p.id)).map(p=>({id:p.id,state:p.state}))};",args:[]});console.log('Owned Firefox extension UI:',JSON.stringify(state));
+ }finally{
+  if(driver?.exitCode===null)owned=Array.from(new Map([...owned,...captureTree(capture(driver))].map(row=>[row.pid,row])).values());
+  const wrapper=driver?{process:()=>driver,close:async()=>{try{if(session)await request('DELETE','/session/'+session);}finally{if(driver.exitCode===null){const exited=once(driver,'exit');driver.kill('SIGTERM');await exited;}}}}:null;
+  await cleanupDesktop({app:wrapper,owned,temporary,watchdog});
+  if(driverPort){try{const listeners=execFileSync('/usr/sbin/lsof',['-nP','-iTCP:'+driverPort,'-sTCP:LISTEN'],{encoding:'utf8'});assert.equal(listeners.trim(),'','Owned Firefox driver port remains occupied.');}catch(error){if(error.status!==1)throw error;}}
+ }
+ console.log('PASS: real installed Firefox temporary extension UI probe; owned process and loopback port absence verified. Not capture qualification.');
+}
+main().catch(error=>{console.error(error.message);process.exitCode=1;});
