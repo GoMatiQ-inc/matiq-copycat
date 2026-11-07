@@ -22,6 +22,9 @@ async function main(){
   const action=await request('POST','/session/'+session+'/element',{using:'css selector',value:'#guides_matiqinc_com-BAP'});await request('POST','/session/'+session+'/element/'+action[elementKey]+'/click',{});
   const frames=await request('POST','/session/'+session+'/execute/sync',{script:"return Array.from(document.querySelectorAll('browser')).map(e=>({id:e.id,src:e.getAttribute('src'),type:e.getAttribute('type'),view:e.getAttribute('webextension-view-type'),remote:e.getAttribute('remote'),context:e.browsingContext?.id}));",args:[]});console.log('Actual extension browser frames:',JSON.stringify(frames));
   console.log('BiDi contexts:',JSON.stringify(await bidi('browsingContext.getTree')));console.log('BiDi realms:',JSON.stringify(await bidi('script.getRealms')));console.log('Chrome-scoped BiDi contexts:',JSON.stringify(await bidi('browsingContext.getTree',{'moz:scope':'chrome'})));console.log('Actual installed addon:',JSON.stringify(await bidi('webExtension.moz:listExtensions')));
+  const bounds=await request('POST','/session/'+session+'/execute/sync',{script:"const b=document.querySelector('browser[webextension-view-type=\"popup\"]');const r=b.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,windowWidth:innerWidth,windowHeight:innerHeight,dpr:devicePixelRatio};",args:[]});console.log('Actual popup embedder bounds:',JSON.stringify(bounds));
+  await fs.mkdir(path.join(__dirname,'../.validation'),{recursive:true});await fs.writeFile(path.join(__dirname,'../.validation/firefox-real-popup.png'),Buffer.from(await request('GET','/session/'+session+'/screenshot'),'base64'));
+
 
  }finally{
   if(driver?.exitCode===null)owned=Array.from(new Map([...owned,...captureTree(capture(driver))].map(row=>[row.pid,row])).values());
