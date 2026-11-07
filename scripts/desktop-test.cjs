@@ -19,7 +19,7 @@ async function main(){
   await page.getByLabel('Guide title',{exact:true}).fill('Offline onboarding');
   await page.getByRole('button',{name:'Add manual step',exact:true}).click();
   await page.getByLabel('Instruction',{exact:true}).fill('Open the settings panel');
-  await page.getByLabel('Notes',{exact:true}).fill('Review this step');
+  await page.getByLabel('Notes',{exact:true}).fill('CONTROLLED-SECRET-NOTE');
   // A controlled image and dialog destination exercise real editor/export code; this is development evidence, not native permission qualification.
   const data=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=100;c.height=100;const x=c.getContext('2d');x.fillStyle='#ff0000';x.fillRect(0,0,100,100);return c.toDataURL('image/png').split(',')[1];});
   const image=path.join(temporary,'fixture.png');await fs.writeFile(image,Buffer.from(data,'base64'));
@@ -37,11 +37,12 @@ async function main(){
    await page.waitForFunction(()=>document.querySelector('#message').textContent.startsWith('Export saved.'));
    assert.ok((await fs.stat(target)).size>100);
   }
+  for(const name of ['export.html','export.md']){const text=await fs.readFile(path.join(temporary,name),'utf8');assert.ok(!text.includes('CONTROLLED-SECRET-NOTE'),'Read-only export retained text attached to a redacted step.');assert.ok(text.includes('review this instruction before sharing'));}
   const sanitized=JSON.parse(await fs.readFile(path.join(temporary,'export.mqguide')));assert.equal(sanitized.guide.id,guideID);assert.equal(sanitized.guide.steps[0].id,stepID);assert.deepEqual(sanitized.guide.steps[0].annotations,[]);assert.equal(sanitized.guide.steps[0].notes,'');assert.notEqual(sanitized.guide.steps[0].asset,saved.guide.steps[0].asset);
   const pixels=await page.evaluate(async project=>{const asset=project.assets[project.guide.steps[0].asset],im=new Image();im.src='data:image/png;base64,'+asset.data;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');x.drawImage(im,0,0);return Array.from(x.getImageData(15,15,1,1).data);},sanitized);assert.deepEqual(pixels,[0,0,0,255]);
   assert.ok((await fs.readFile(path.join(temporary,'export.pdf'))).subarray(0,5).toString()==='%PDF-');
   await cleanupDesktop({app,owned});app=null;owned=[];
-  page=await launch();await page.getByRole('button',{name:/Offline onboarding/}).click();await page.waitForFunction(()=>document.querySelector('#instruction').value==='Open the settings panel');assert.equal(await page.getByLabel('Instruction',{exact:true}).inputValue(),'Open the settings panel');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Review this step');
+  page=await launch();await page.getByRole('button',{name:/Offline onboarding/}).click();await page.waitForFunction(()=>document.querySelector('#instruction').value==='Open the settings panel');assert.equal(await page.getByLabel('Instruction',{exact:true}).inputValue(),'Open the settings panel');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'CONTROLLED-SECRET-NOTE');
   assert.equal((await fs.readFile(guideFile,'utf8')).includes(stepID),true);
   await page.getByLabel('Notes',{exact:true}).fill('Recovered interrupted edit');
   await app.evaluate(({app,dialog})=>{global.fixtureCloseError='';dialog.showErrorBox=(_title,detail)=>{global.fixtureCloseError=detail;};app.quit();});

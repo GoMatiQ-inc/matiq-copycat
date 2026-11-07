@@ -115,7 +115,9 @@ exports.activate = async host => {
         s.asset=P.addImage(result,Buffer.from(data.slice(22),'base64'));s.annotations=[];s.crop=null;
       }
       s.source=null;
-      if(sanitized){s.notes='';if(original.annotations.some(a=>a.type==='redact'))s.instruction=`Step ${i+1} — review this instruction before sharing`;}
+      const redacted=original.annotations.some(a=>a.type==='redact');
+      if(sanitized||redacted)s.notes='';
+      if(redacted)s.instruction=`Step ${i+1} — review this instruction before sharing`;
     }
     return P.compact(result);
   }
