@@ -1,9 +1,9 @@
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
 const { _electron:electron }=require('playwright');
 const {capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs'),{cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
-async function launchPackagedGuides({root,profile}){
+async function launchPackagedGuides({root,profile,openWorkspace=true,suite=!!process.env.GUIDES_SUITE_EXECUTABLE_PATH}){
  assert.equal(process.platform,'darwin','Use the authorized Mac for actual packaged browser qualification.');
- const suite=!!process.env.GUIDES_SUITE_EXECUTABLE_PATH,executable=process.env.GUIDES_SUITE_EXECUTABLE_PATH||process.env.GUIDES_EXECUTABLE_PATH,candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
+ const executable=suite?process.env.GUIDES_SUITE_EXECUTABLE_PATH:process.env.GUIDES_EXECUTABLE_PATH,candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
  assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);assert.ok(executable);
  const contents=path.dirname(path.dirname(executable)),bundle=path.dirname(contents),archive=path.join(contents,'Resources/app.asar'),asar=require('node:module').createRequire(require.resolve('@matiq-solutions/sdk'))('@electron/asar');let record,app;
  try{
@@ -15,7 +15,7 @@ async function launchPackagedGuides({root,profile}){
   for(const file of execFileSync('git',['ls-tree','-r','--name-only',candidate.commit,'--','src','matiq-tool.json'],{cwd:root,encoding:'utf8'}).trim().split('\n'))assert.ok((suite?await fs.readFile(path.join(record.directory,file)):asar.extractFile(archive,file)).equals(execFileSync('git',['show',candidate.commit+':'+file],{cwd:root})),'Packaged source differs: '+file);
   app=await electron.launch({executablePath:executable,args:['--user-data-dir='+profile],timeout:20000});const actual=await app.evaluate(({app})=>({packaged:app.isPackaged,version:app.getVersion(),profile:app.getPath('userData'),electron:process.versions.electron}));assert.equal(actual.packaged,true);if(!suite)assert.equal(actual.version,candidate.version);assert.equal(actual.electron,candidate.electron);assert.equal(await fs.realpath(actual.profile),profile);
   let editor=await app.firstWindow();editor.setDefaultTimeout(12000);await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
-  if(suite){
+  if(suite&&openWorkspace){
    await editor.locator('article').filter({has:editor.getByRole('heading',{name:'MatiQ Guides',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();let workspace;
    for(let i=0;i<200;i++){workspace=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(workspace)break;await new Promise(resolve=>setTimeout(resolve,50));}
    assert.ok(workspace,'The signed suite must load the installed Guides workspace.');editor=workspace;editor.setDefaultTimeout(12000);
