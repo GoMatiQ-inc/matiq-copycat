@@ -15,7 +15,7 @@ async function main(){
  }
  watchdog=setTimeout(()=>{console.error('Guides desktop test timed out; owned cleanup is required.');if(app?.process().exitCode===null)app.process().kill('SIGTERM');},60000);
  try{
-  let page=await launch();await page.getByRole('button',{name:'New guide',exact:true}).click();
+  let page=await launch();await require('./invalid-import-fixture.cjs').exerciseInvalidImports(app,page,temporary);await page.getByRole('button',{name:'New guide',exact:true}).click();
   await page.getByLabel('Guide title',{exact:true}).fill('Offline onboarding');
   await page.getByRole('button',{name:'Add manual step',exact:true}).click();
   await page.getByLabel('Instruction',{exact:true}).fill('Open the settings panel');

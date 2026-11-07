@@ -45,14 +45,14 @@ function append(project,event){
  if(project.guide.steps.length>=500)throw Error('The guide reached 500 steps. Stop capture and begin another guide.');
  const next=P.clone(project),s=P.step();s.id=event.id;s.timestamp=event.at;
  if(!['browser','desktop'].includes(event.source)||![event.source,'mixed'].includes(capture.source))throw Error('The action source is outside this capture scope.');
- s.kind=event.source;s.instruction=instruction(event);
+ s.kind=event.source;
  if(event.source==='browser'){
-  const url=new URL(event.origin);if(!['https:','http:'].includes(url.protocol)||url.origin!==event.origin)throw Error('Browser context must be an HTTP(S) origin without paths or query data.');
-  s.source={origin:url.origin};
+  s.source={origin:P.httpOrigin(event.origin,'Browser context must be an HTTP(S) origin without paths or query data.')};
  }else{
   if(event.action!=='click'||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires a selected application and a supported mouse action.');
   s.source={application:event.application};
  }
+ s.instruction=instruction(event);
  if(!event.image||typeof event.image.data!=='string'||event.image.data.length>950000)throw Error('Capture screenshot is missing or exceeds the bridge limit. Reduce its size and retry.');
  const bytes=Buffer.from(event.image.data,'base64');if(bytes.toString('base64')!==event.image.data)throw Error('Capture screenshot encoding is invalid.');
  s.asset=P.addImage(next,bytes);if(next.assets[s.asset].mediaType!==event.image.mediaType)throw Error('Capture image type does not match its bytes.');

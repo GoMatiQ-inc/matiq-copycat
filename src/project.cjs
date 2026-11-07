@@ -10,6 +10,13 @@ function text(value, max, label) {
   if (typeof value !== 'string' || value.length > max) throw Error(`${label} must be text of at most ${max} characters.`);
   return value;
 }
+function httpOrigin(value,message='Source context must be an HTTP(S) origin without credentials, paths or query data.') {
+  if (typeof value !== 'string' || value.length > 2048) throw Error(message);
+  let url;
+  try { url = new URL(value); } catch { throw Error(message); }
+  if (!['https:','http:'].includes(url.protocol) || url.origin !== value) throw Error(message);
+  return url.origin;
+}
 function id(value) {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)) throw Error('Project contains an invalid stable identity.');
   return value;
@@ -67,7 +74,7 @@ function validate(value) {
     // Source context is deliberately restricted: never persist query strings, fragments, form values or page HTML.
     let source = null;
     if (s.source) {
-      if (s.source.origin) {const url = new URL(s.source.origin); if (!['https:','http:'].includes(url.protocol) || url.origin !== s.source.origin) throw Error('Source context must be an HTTP(S) origin without credentials, paths or query data.'); source={origin:url.origin};}
+      if (Object.hasOwn(s.source,'origin')) source={origin:httpOrigin(s.source.origin)};
       else if (s.source.application) source={application:text(s.source.application,200,'Application')};
     }
     return {id:s.id,kind:s.kind,instruction:text(s.instruction,10000,'Instruction'),notes:text(s.notes,20000,'Notes'),timestamp:s.timestamp,source,asset:s.asset,crop:s.crop ? rect(s.crop):null,annotations};
@@ -111,4 +118,4 @@ async function lock(file) {
   }
   return async()=>{await checkDirectory();let current;try{current=await readRecord();}catch(error){if(error.code==='ENOENT'){await checkDirectory();return;}throw error;}if(current!==body)throw Error('Project ownership changed. Keep the project open and investigate its lock before retrying closure.');await checkDirectory();await fs.unlink(lockPath);};
 }
-module.exports={create,step,validate,rect,image,hash,addImage,read,atomicWrite,atomicBytes,lock,compact,clone,MAX_BYTES};
+module.exports={create,step,validate,httpOrigin,rect,image,hash,addImage,read,atomicWrite,atomicBytes,lock,compact,clone,MAX_BYTES};
