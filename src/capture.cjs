@@ -20,9 +20,10 @@ function instruction(event){
  if(event.action==='click')return control?`Click “${control}”`:`Click the ${noun}`;
  throw Error('Unsupported capture action. Add an editable manual step for this action.');
 }
+function addIssue(capture,reason){if(capture.issues.includes(reason))return;if(capture.issues.length<100)capture.issues.push(reason);else capture.issues[99]='More capture warnings occurred than this project can list. The guide may be incomplete; review every step before sharing.';}
 function begin(project,source='browser'){
  if(project.capture&&['recording','paused'].includes(project.capture.phase))throw Error('Finish or cancel the current capture before starting another.');
- const next=P.clone(project);next.capture=state({scope:randomUUID(),windows:[[Date.now(),0]],id:randomUUID(),phase:'recording',source,started:Date.now(),cutoff:0,baseSteps:project.guide.steps.map(s=>s.id),receipts:[],issues:[]});return next;
+ const next=P.clone(project);next.capture=state({scope:randomUUID(),windows:[[Date.now(),0]],id:randomUUID(),phase:'recording',source,started:Date.now(),cutoff:0,baseSteps:project.guide.steps.map(s=>s.id),receipts:[],issues:project.capture?.issues||[]});return next;
 }
 function transition(project,command,reason=''){
  const next=P.clone(project),capture=next.capture;if(!capture)throw Error('Start a capture first.');
@@ -31,7 +32,7 @@ function transition(project,command,reason=''){
  else if(command==='stop'&&['recording','paused'].includes(capture.phase)){capture.phase='stopped';capture.cutoff=Date.now();if(!capture.windows.at(-1)[1])capture.windows.at(-1)[1]=capture.cutoff;}
  else if(command==='cancel'&&['recording','paused'].includes(capture.phase)){capture.phase='cancelled';capture.cutoff=Date.now();if(!capture.windows.at(-1)[1])capture.windows.at(-1)[1]=capture.cutoff;next.guide.steps=next.guide.steps.filter(s=>capture.baseSteps.includes(s.id));capture.receipts=[];}
  else throw Error('This capture transition is unavailable. Refresh its status and retry.');
- if(reason){capture.issues.push(String(reason).slice(0,1000));capture.issues=capture.issues.slice(-100);}return P.compact(next);
+ if(reason)addIssue(capture,String(reason).slice(0,1000));return P.compact(next);
 }
 function append(project,event){
  if(!event||typeof event!=='object'||Array.isArray(event))throw Error('Invalid capture step message. Reconnect the approved extension.');
@@ -58,5 +59,5 @@ function append(project,event){
  if(event.target)s.annotations=[{type:'box',...P.rect(event.target),text:''}];
  next.guide.steps.push(s);next.capture.receipts.push(s.id);return {project:P.validate(next),duplicate:false};
 }
-function warn(project,reason){if(typeof reason!=='string'||!reason||reason.length>1000)throw Error('Capture warning must contain up to 1,000 characters.');const next=P.clone(project);if(!next.capture||!['recording','paused'].includes(next.capture.phase))throw Error('No active capture is available for this warning.');if(!next.capture.issues.includes(reason))next.capture.issues.push(reason);next.capture.issues=next.capture.issues.slice(-100);return P.validate(next);}
+function warn(project,reason){if(typeof reason!=='string'||!reason||reason.length>1000)throw Error('Capture warning must contain up to 1,000 characters.');const next=P.clone(project);if(!next.capture||!['recording','paused'].includes(next.capture.phase))throw Error('No active capture is available for this warning.');addIssue(next.capture,reason);return P.validate(next);}
 module.exports={state,begin,transition,append,instruction,warn};

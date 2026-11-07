@@ -96,7 +96,7 @@ exports.activate = async host => {
       if(candidates.length){
         const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Interrupted work is available.',detail:'Recover the latest draft or pending save, or keep the last completed save. Your saved guide remains intact until you save recovered work.',buttons:['Recover latest work','Keep last save','Cancel'],cancelId:2,defaultId:0});
         if(choice.response===2){await unlock();return snapshot();}
-        if(choice.response===0){loaded=await P.read(candidates[0].path);if(loaded.guide.id!==JSON.parse(await fs.readFile(target,'utf8')).guide.id)throw Error('Recovery identity differs from the saved guide. Import a verified copy separately.');recovered=true;}
+        if(choice.response===0){loaded=await P.read(candidates[0].path);if(loaded.guide.id!==(await P.read(target)).guide.id)throw Error('Recovery identity differs from the saved guide. Import a verified copy separately.');recovered=true;}
         else for(const candidate of candidates)await fs.unlink(candidate.path);
       }
       if(loaded.capture?.phase==='recording')loaded=C.transition(loaded,'pause','Capture was interrupted. Reconnect explicitly before recording more actions.');

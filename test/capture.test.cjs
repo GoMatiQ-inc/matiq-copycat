@@ -46,3 +46,14 @@ test('desktop steps join browser guides without recording values or inventing un
  assert.throws(()=>C.append(p,event(p)),/outside/);
  const cancelled=C.transition(p,'cancel');assert.equal(cancelled.guide.steps.length,1);assert.equal(cancelled.guide.steps[0].id,browser);
 });
+
+test('saved capture gaps survive later browser/native sessions and cancellation',async t=>{
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'guides-warnings-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));const file=path.join(directory,'guide.mqguide');
+ let p=C.begin(P.create());p=C.append(p,event(p)).project;const first=p.guide.steps[0].id,reason='A browser action was not saved. Review the incomplete guide.';p=C.warn(p,reason);p=C.transition(p,'stop');
+ p=C.begin(p,'desktop');assert.deepEqual(p.capture.issues,[reason]);p=C.append(p,event(p,{source:'desktop',application:'Controlled native app'})).project;p=C.transition(p,'cancel');assert.deepEqual(p.guide.steps.map(s=>s.id),[first]);
+ p=C.begin(p);p=C.transition(p,'stop');await P.atomicWrite(file,p);const reopened=await P.read(file);assert.deepEqual(reopened.capture.issues,[reason]);assert.equal(reopened.guide.steps[0].id,first);assert.equal(reopened.version,1);
+});
+test('bounded warning retention keeps older gaps and explicitly reports overflow',()=>{
+ let p=C.begin(P.create());for(let i=0;i<101;i++)p=C.warn(p,'Controlled missing action '+i);assert.equal(p.capture.issues.length,100);assert.equal(p.capture.issues[0],'Controlled missing action 0');assert.match(p.capture.issues.at(-1),/More capture warnings.*review every step/);
+ p=C.transition(p,'pause','Controlled missing action 0');assert.equal(p.capture.issues.length,100);p=C.transition(p,'stop');p=C.begin(p,'desktop');assert.equal(p.capture.issues[0],'Controlled missing action 0');assert.match(p.capture.issues.at(-1),/More capture warnings/);
+});

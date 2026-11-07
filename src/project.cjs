@@ -80,7 +80,7 @@ function create(title='Untitled guide',description='') { return validate({format
 function step() { return {id:randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]}; }
 function addImage(project, bytes) {const asset=image(bytes),key=hash(bytes);project.assets[key]=asset;return key;}
 function compact(project) { const result=validate(project),used=new Set(result.guide.steps.map(s=>s.asset)); for(const key of Object.keys(result.assets))if(!used.has(key))delete result.assets[key];return result; }
-async function read(file) {const stat=await fs.lstat(file);if (!stat.isFile() || stat.isSymbolicLink() || stat.size>MAX_BYTES)throw Error('Choose a regular project file under 128 MiB; symbolic links are not supported.');return validate(JSON.parse(await fs.readFile(file,'utf8')));}
+async function read(file) {const stat=await fs.lstat(file);if (!stat.isFile() || stat.isSymbolicLink() || stat.size>MAX_BYTES)throw Error('Choose a regular project file under 128 MiB; symbolic links are not supported.');const contents=await fs.readFile(file,'utf8');let parsed;try{parsed=JSON.parse(contents);}catch{throw Error('This file contains invalid JSON. Restore a verified project copy or import a valid portable export.');}return validate(parsed);}
 async function atomicBytes(file,bytes) {
   if(Buffer.byteLength(bytes)>MAX_BYTES)throw Error('Output exceeds 128 MiB. Split the guide before saving.');
   const pending=file+'.pending',handle=await fs.open(pending,constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC|constants.O_NOFOLLOW,0o600);
