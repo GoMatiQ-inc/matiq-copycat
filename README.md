@@ -4,11 +4,13 @@ Local illustrated workflow documentation, using the MatiQ Solutions desktop SDK 
 
 ## Delivery state
 
-Unpublished macOS arm64 development candidates. Current signed/notarized desktop **0.1.5**, source **62b074a**, preserves reviewed wording in redacted exports and retains capture warnings without consuming the description limit. A saved-revision review is required for sharing when redactions/warnings exist; edits or new saves invalidate it. Sanitized projects omit originals, original step notes, source/capture context and interaction times, with warnings retained as manual review notes. Thirty-four core checks pass. Every export holds destination ownership and provides visible cleanup retry. Actual packaged standalone/suite export ownership, cross-form editing and independent documentation checks pass. The signed candidate suite update 0.1.4 → 0.1.5 also passes; released updates remain pending.
+Unpublished signed/notarized macOS arm64 candidate **0.1.7**, source **9418ca7**, using qualified SDK/runtime/shell **0.1.3** and Electron **45.2.3**. Thirty-nine core checks pass. Current actual packaged standalone/suite evidence covers cross-form editing, annotations/redaction, stable identities/assets, independent HTML/Markdown/PDF, revision-bound sharing review, destination ownership and cleanup retry.
 
-With extension **0.1.4**, actual Chrome, Edge and Firefox controlled capture journeys pass in both standalone and suite forms, including Chrome/TextEdit mixed capture and Chrome/Edge rapid controls. Native pressure, editing/save/reopen, ownership handoff, cross-form projects and independent HTML/Markdown/PDF inspection pass. Actual keyboard review, stale-approval rejection and preserved safe wording are verified in both signed forms. A real signed candidate suite-tool update **0.1.3 → 0.1.4** preserves mixed work through an actual restart in unchanged suite 0.1.1. This is not a released marketplace update.
+Actual signed **0.1.6 → 0.1.7** native application update passes checksum rejection, busy quit and unsaved-restart refusal, native signature staging, real installer replacement/relaunch and preserved editable mixed-guide content/assets. Native helpers, registration, staging and listeners are independently cleaned. The real signed suite candidate **0.1.6 → 0.1.7** update also passes staging/restart and retained work in unchanged suite **0.1.1**. These use controlled local candidate feeds/SDK installation, not a published marketplace or release endpoint. See docs/UPDATES.md.
 
-Full acceptance remains incomplete: fresh OS permissions, broader browser/recovery/offline and writer cases, marketplace installation, independently released updates, standalone updater implementation and signed extension distribution remain open. No public availability is claimed.
+With developer extension **0.1.4**, all six real Chrome, Edge and Firefox capture journeys pass against both signed 0.1.7 forms. Chrome includes actual TextEdit mixed capture. The successor also quarantines rejected authentication/protocol connections before later queued actions reach the guide owner. Earlier native pressure and ownership-handoff evidence is retained with its original versions.
+
+Full acceptance remains incomplete: fresh OS permissions, broader browser/native/recovery/offline and writer cases, marketplace installation, independently published updates, shared bridge lifecycle and signed extension distribution remain open. No public availability is claimed.
 
 ## Develop
 
@@ -24,6 +26,6 @@ Editable projects retain originals. HTML, Markdown/images and PDF burn crop/anno
 
 ## Release contract
 
-Build/sign/notarize the standalone through the existing native release infrastructure and SDK credential helpers. Then use `matiq-tool pack-app --resources ... --extra native --target darwin-arm64 --output ... --url ...` against those same resources to produce the signed `.mqt` and matching `.release.json`. Signing keys belong only in the protected release environment. No release should be published before actual standalone/suite, capture, export, marketplace and update acceptance passes.
+Build/sign/notarize the standalone through the existing native release infrastructure and SDK credential helpers. Then use `matiq-tool pack-app --resources ... --extra native --target darwin-arm64 --output ... --url ...` against those same resources to produce the signed `.mqt` and matching `.release.json`. Signing keys belong only in the protected release environment. General availability requires the full standalone/suite, capture, export, marketplace and update acceptance evidence. Candidate publication and catalog metadata must follow the existing reviewed release process.
 
 The current manifest limits the first intended target to darwin-arm64; it is not a qualification claim. No other platform is advertised. See docs/PROVENANCE.md for reference boundaries.
