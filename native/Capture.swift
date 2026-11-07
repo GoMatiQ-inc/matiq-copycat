@@ -11,9 +11,17 @@ func fail(_ reason: String) -> Never {
     send(["type": "issue", "reason": reason])
     exit(1)
 }
+func applicationContext(_ app: SCRunningApplication) -> (name:String,bundle:String)? {
+    let running = NSRunningApplication(processIdentifier:app.processID)
+    let bundle = app.bundleIdentifier.isEmpty ? (running?.bundleIdentifier ?? "") : app.bundleIdentifier
+    guard !bundle.isEmpty else { return nil }
+    let names = [app.applicationName, running?.localizedName ?? "", bundle]
+    guard let name = names.first(where: { !$0.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty }) else { return nil }
+    return (String(name.prefix(200)),bundle)
+}
 func permitted(_ window: SCWindow) -> Bool {
-    guard let app = window.owningApplication else { return false }
-    let id = app.bundleIdentifier.lowercased()
+    guard let app = window.owningApplication, let context = applicationContext(app) else { return false }
+    let id = context.bundle.lowercased()
     let browsers = ["com.google.chrome", "com.microsoft.edgemac", "org.mozilla.firefox", "com.apple.safari", "com.brave.browser", "com.operasoftware.opera", "company.thebrowser.browser", "org.chromium.chromium"]
     return window.windowLayer == 0 && window.frame.width > 40 && window.frame.height > 40 &&
         !id.hasPrefix("com.matiq.") && !browsers.contains(where: { id == $0 || id.hasPrefix($0 + ".") })
@@ -36,7 +44,11 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
     let role = text(element, kAXRoleAttribute as CFString)
     // Never read AXValue, selected text, document URLs, or text-field contents.
     var result: [String: Any] = ["control": roles[role] ?? "control"]
-    if roles[role] != nil { result["label"] = String(text(element, kAXTitleAttribute as CFString).prefix(60)) }
+    if roles[role] != nil {
+        let title = text(element,kAXTitleAttribute as CFString)
+        let label = title.isEmpty ? text(element,kAXDescriptionAttribute as CFString) : title
+        result["label"] = String(label.prefix(60))
+    }
     var position: CFTypeRef?, size: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
        AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
@@ -71,7 +83,8 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
     init(window: SCWindow) {
         id = window.windowID
         pid = window.owningApplication!.processID
-        application = window.owningApplication!.applicationName
+        guard let context = applicationContext(window.owningApplication!) else { fail("The selected application identity changed. Refresh the window list before recording.") }
+        application = context.name
     }
     func stop(_ reason: String? = nil) {
         guard !stopped else { return }
@@ -209,7 +222,7 @@ Task { @MainActor in
         let available = try await content()
         let windows = available.windows.filter(permitted)
         if !recording {
-            send(["type": "windows", "windows": windows.map { ["id": $0.windowID, "application": $0.owningApplication!.applicationName, "pid": $0.owningApplication!.processID, "title": String(($0.title ?? "Untitled window").prefix(200))] }])
+            send(["type": "windows", "windows": windows.map { ["id": $0.windowID, "application": applicationContext($0.owningApplication!)?.name ?? "", "pid": $0.owningApplication!.processID, "title": String(($0.title ?? "Untitled window").prefix(200))] }])
             exit(0)
         }
         guard args.count == 4, let id = UInt32(args[2]), let pid = Int32(args[3]), let window = windows.first(where: { $0.windowID == id && $0.owningApplication?.processID == pid }) else { fail("The selected window is unavailable. Refresh the window list and select it again.") }
