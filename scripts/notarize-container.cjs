@@ -1,5 +1,6 @@
 const fs=require('node:fs/promises'),path=require('node:path'),{execFile}=require('node:child_process'),{promisify}=require('node:util'),crypto=require('node:crypto');
 const yaml=require('js-yaml');
+const {buildBlockMap}=require('app-builder-lib/out/targets/blockmap/blockmap');
 const run=promisify(execFile);
 module.exports=async function notarizeContainer(){
  const version=require('../package.json').version,folder=path.join(__dirname,'../dist'),name='MatiQ-Guides-'+version+'-mac-arm64.dmg',file=path.join(folder,name);
@@ -10,7 +11,6 @@ module.exports=async function notarizeContainer(){
  await run('/usr/bin/xcrun',['stapler','staple',file],{timeout:120000,maxBuffer:256*1024});
  await run('/usr/bin/xcrun',['stapler','validate','-q',file],{timeout:120000,maxBuffer:256*1024});
  // The final container bytes, not the pre-staple image, own the update hashes.
- const {buildBlockMap}=require('app-builder-lib/out/util/blockmap');
  await buildBlockMap(file,'gzip',file+'.blockmap');
  const bytes=await fs.readFile(file),sha512=crypto.createHash('sha512').update(bytes).digest('base64');
  const metadataFile=path.join(folder,'latest-mac.yml'),metadata=yaml.load(await fs.readFile(metadataFile,'utf8'));
