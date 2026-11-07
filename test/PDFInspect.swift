@@ -10,10 +10,9 @@ for index in 0..<document.pageCount {
     let bounds = page.bounds(for: .mediaBox)
     let image = page.thumbnail(of: NSSize(width: bounds.width * 2, height: bounds.height * 2), for: .mediaBox)
     guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff), let pixels = bitmap.cgImage else { fatalError("PDF page could not be rendered independently.") }
-    if index == 0 {
-        guard let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("Save the rendered PDF inspection preview.") }
-        try png.write(to: URL(fileURLWithPath: args[2]))
-    }
+    guard let png = bitmap.representation(using: .png, properties: [:]) else { fatalError("Save the rendered PDF inspection preview.") }
+    let preview = index == 0 ? args[2] : args[2] + ".page-\(index + 1).png"
+    try png.write(to: URL(fileURLWithPath: preview))
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.recognitionLanguages = ["en-US"]
