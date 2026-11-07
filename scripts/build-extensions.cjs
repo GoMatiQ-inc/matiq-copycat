@@ -1,5 +1,5 @@
 const fs=require('node:fs/promises'),path=require('node:path'),{execFileSync}=require('node:child_process');
-async function main(){const root=path.join(__dirname,'..'),identity=require('../extension/identities.json'),version=require('../package.json').version,output=path.join(root,'extensions-dist');await fs.mkdir(output,{recursive:true});
+async function main(){const root=path.join(__dirname,'..'),identity=require('../extension/identities.json'),version=require('../extension/version.json').version,output=path.join(root,'extensions-dist');await fs.mkdir(output,{recursive:true});
  for(const browser of ['chrome','edge','firefox']){
   const directory=path.join(output,browser);await fs.rm(directory,{recursive:true,force:true});await fs.mkdir(directory,{recursive:true});
   for(const file of ['background.js','content.js','popup.html','popup.css','popup.js'])await fs.copyFile(path.join(root,'extension/shared',file),path.join(directory,file));
