@@ -1,14 +1,16 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,busy=false;
+let project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,busy=false,draftTimer=null;
+window.guidesDispose=()=>{clearTimeout(draftTimer);};
 window.guidesDirty=false;
 window.guidesRender=async({step,asset})=>(await render(step,asset)).toDataURL('image/png');
 const clone=value=>JSON.parse(JSON.stringify(value));
 const step=()=>project?.guide.steps.find(s=>s.id===selected);
 function message(error=''){$('message').textContent=error.message||error;}
 function state(label){$('save-state').textContent=label;}
-function changed(){window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);}
-function remember(){past.push(clone(project));if(past.length>20)past.shift();future=[];}
+function changed(){window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)request('draft',project).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
+const historySnapshot=()=>({...project,guide:clone(project.guide),assets:{...project.assets}});
+function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy)return;remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}}
 function accept(result){project=result.project;window.guidesDirty=result.saveState!=='saved';state(result.saveState==='saved'?'Saved':result.saveState==='failed'?'Failed to save':'Unsaved');selected=project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
@@ -33,8 +35,8 @@ $('privacy-nav').onclick=()=>{$('privacy').hidden=!$('privacy').hidden;};
 $('duplicate-guide').onclick=()=>run(async()=>{await request('duplicate');message('Saved copy added to your library.');});
 $('delete-guide').onclick=()=>run(async()=>accept(await request('delete')));
 $('add-step').onclick=()=>mutation(()=>{const value={id:crypto.randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]};project.guide.steps.push(value);selected=value.id;});
-$('undo').onclick=()=>{if(!past.length)return;future.push(clone(project));project=past.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
-$('redo').onclick=()=>{if(!future.length)return;past.push(clone(project));project=future.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+$('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());project=past.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+$('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());project=future.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
 for(const [id,delta] of [['up',-1],['down',1]])$(id).onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.findIndex(s=>s.id===selected),to=i+delta;if(i>=0&&to>=0&&to<list.length)[list[i],list[to]]=[list[to],list[i]];});
 $('duplicate-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step()),copy=clone(step());copy.id=crypto.randomUUID();list.splice(i+1,0,copy);selected=copy.id;});
 $('delete-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step());list.splice(i,1);selected=list[Math.min(i,list.length-1)]?.id;});

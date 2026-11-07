@@ -2,6 +2,8 @@ const { _electron:electron }=require('playwright');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),assert=require('node:assert/strict');
 const {capture,captureTree}=require('@matiq-solutions/sdk/fixture-lifecycle.cjs');
 const {cleanupDesktop}=require('@matiq-solutions/sdk/fixture-cleanup.cjs');
+const {execFileSync}=require('node:child_process');
+const {once}=require('node:events');
 const root=path.join(__dirname,'..');
 async function main(){
  const temporary=await fs.mkdtemp(path.join(os.tmpdir(),'matiq-guides-ui-'));let app,owned=[],watchdog;
@@ -41,7 +43,21 @@ async function main(){
   await cleanupDesktop({app,owned});app=null;owned=[];
   page=await launch();await page.getByRole('button',{name:/Offline onboarding/}).click();assert.equal(await page.getByLabel('Instruction',{exact:true}).inputValue(),'Open the settings panel');assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Review this step');
   assert.equal((await fs.readFile(guideFile,'utf8')).includes(stepID),true);
-  console.log('PASS: actual SDK standalone workspace creates, illustrates, redacts, saves, exports and reopens a guide. Development execution only.');
+  await page.getByLabel('Notes',{exact:true}).fill('Recovered interrupted edit');
+  await app.evaluate(({app,dialog})=>{global.fixtureCloseError='';dialog.showErrorBox=(_title,detail)=>{global.fixtureCloseError=detail;};app.quit();});
+  for(let i=0;i<50;i++){if(await app.evaluate(()=>global.fixtureCloseError))break;await new Promise(resolve=>setTimeout(resolve,50));}
+  assert.match(await app.evaluate(()=>global.fixtureCloseError),/Save the current guide/);
+  for(let i=0;i<50;i++){try{await fs.access(guideFile+'.draft');break;}catch(error){if(error.code!=='ENOENT')throw error;}await new Promise(resolve=>setTimeout(resolve,50));}
+  assert.equal(JSON.parse(await fs.readFile(guideFile+'.draft')).guide.steps[0].notes,'Recovered interrupted edit');
+  owned=captureTree(capture(app.process())).map(row=>({...row,identity:execFileSync('/bin/ps',['-p',String(row.pid),'-o','uid=,lstart=,comm='],{encoding:'utf8'}).trim()}));
+  const exited=once(app.process(),'exit');app.process().kill('SIGKILL');await exited;
+  await cleanupDesktop({app,owned});app=null;owned=[];
+  page=await launch();await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:0});});
+  await page.getByRole('button',{name:/Offline onboarding/}).click();assert.equal(await page.getByLabel('Notes',{exact:true}).inputValue(),'Recovered interrupted edit');
+  assert.equal(await page.locator('#save-state').innerText(),'Unsaved');
+  await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
+  await assert.rejects(fs.access(guideFile+'.draft'),{code:'ENOENT'});
+  console.log('PASS: actual SDK standalone workspace creates, illustrates, redacts, saves, exports, reopens, refuses unsaved closure and recovers after an actual owned-process crash. Development execution only.');
  }catch(error){console.error('Journey failed:',error);if(app)for(const p of app.windows())console.error('Window:',p.url(),(await p.locator('body').innerText().catch(()=>'' )).slice(0,1500));throw error;}finally{await cleanupDesktop({app,owned,temporary,watchdog});}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

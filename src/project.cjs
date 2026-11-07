@@ -1,6 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const {constants}=require('node:fs');
 const { randomUUID, createHash } = require('node:crypto');
 const MAX_BYTES = 128 * 1024 * 1024;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -22,6 +23,19 @@ function image(bytes) {
   const png = bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
   const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
   if (!png && !jpeg) throw Error('Only PNG and JPEG screenshots are supported. Convert this asset before importing.');
+  let width=0,height=0;
+  if(png){if(bytes.length<33||bytes.toString('ascii',12,16)!=='IHDR')throw Error('PNG screenshot has no valid image header.');width=bytes.readUInt32BE(16);height=bytes.readUInt32BE(20);}
+  else {
+    let offset=2;
+    while(offset+4<bytes.length){
+      if(bytes[offset++]!==255)break;while(bytes[offset]===255)offset++;
+      const marker=bytes[offset++];if(marker===0xda||marker===0xd9)break;
+      if(marker===0xd8||marker===0x01||(marker>=0xd0&&marker<=0xd7))continue;
+      if(offset+2>bytes.length)break;const length=bytes.readUInt16BE(offset);if(length<2||offset+length>bytes.length)break;
+      if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)&&length>=8){height=bytes.readUInt16BE(offset+3);width=bytes.readUInt16BE(offset+5);break;}offset+=length;
+    }
+  }
+  if(!width||!height||width>32768||height>32768||width*height>32000000)throw Error('Choose a valid screenshot under 32 megapixels and 32,768 pixels per edge.');
   return {mediaType:png?'image/png':'image/jpeg',data:bytes.toString('base64')};
 }
 function validate(value) {
@@ -64,13 +78,15 @@ function step() { return {id:randomUUID(),kind:'manual',instruction:'Describe th
 function addImage(project, bytes) {const asset=image(bytes),key=hash(bytes);project.assets[key]=asset;return key;}
 function compact(project) { const result=validate(project),used=new Set(result.guide.steps.map(s=>s.asset)); for(const key of Object.keys(result.assets))if(!used.has(key))delete result.assets[key];return result; }
 async function read(file) {const stat=await fs.lstat(file);if (!stat.isFile() || stat.isSymbolicLink() || stat.size>MAX_BYTES)throw Error('Choose a regular project file under 128 MiB; symbolic links are not supported.');return validate(JSON.parse(await fs.readFile(file,'utf8')));}
-async function atomicWrite(file,project) {
-  const bytes=JSON.stringify(compact(project));if(Buffer.byteLength(bytes)>MAX_BYTES)throw Error('Project exceeds 128 MiB. Split the guide before saving.');
-  const pending=file+'.pending';const handle=await fs.open(pending,'w',0o600);
+async function atomicBytes(file,bytes) {
+  if(Buffer.byteLength(bytes)>MAX_BYTES)throw Error('Output exceeds 128 MiB. Split the guide before saving.');
+  const pending=file+'.pending',handle=await fs.open(pending,constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC|constants.O_NOFOLLOW,0o600);
   try {await handle.writeFile(bytes);await handle.sync();}finally{await handle.close();}
   await fs.rename(pending,file);
   const directory=await fs.open(path.dirname(file),'r');try{await directory.sync();}finally{await directory.close();}
 }
+async function atomicWrite(file,project) {await atomicBytes(file,JSON.stringify(compact(project)));}
+
 async function lock(file) {
   const lockPath=file+'.lock',owner={host:os.hostname(),pid:process.pid,token:randomUUID()},body=JSON.stringify(owner);
   async function attempt(){const handle=await fs.open(lockPath,'wx',0o600);try{await handle.writeFile(body);}finally{await handle.close();}}
@@ -88,4 +104,4 @@ async function lock(file) {
   }
   return async()=>{const current=await fs.readFile(lockPath,'utf8');if(current!==body)throw Error('Project ownership changed. Keep the project open and investigate its lock before retrying closure.');await fs.unlink(lockPath);};
 }
-module.exports={create,step,validate,rect,image,hash,addImage,read,atomicWrite,lock,compact,clone,MAX_BYTES};
+module.exports={create,step,validate,rect,image,hash,addImage,read,atomicWrite,atomicBytes,lock,compact,clone,MAX_BYTES};

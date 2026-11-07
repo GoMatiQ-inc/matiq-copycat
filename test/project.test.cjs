@@ -19,3 +19,9 @@ test('captured source cannot retain tokens, paths or query strings',()=>{const p
 test('compaction removes unused original assets',()=>{const p=illustrated();p.guide.steps[0].asset=null;assert.deepEqual(P.compact(p).assets,{});});
 test('documentation escapes active content and excludes source context, asset identifiers and annotations',()=>{const p=illustrated();p.guide.title='<script>alert(1)</script>';p.guide.steps[0].source={origin:'https://private.example'};const html=documentation(p);assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('private.example'));assert.ok(!html.includes('"annotations"'));assert.ok(html.includes('data:image/png;base64,'));assert.ok(markdown(p,'Guide.md.assets').includes(p.guide.steps[0].asset+'.png'));});
 test('symbolic project paths are rejected',async t=>{const root=await temp(t),file=path.join(root,'guide.mqguide'),link=path.join(root,'alias.mqguide');await P.atomicWrite(file,illustrated());await fs.symlink(file,link);await assert.rejects(P.read(link),/symbolic links/);});
+
+test('image dimension bombs are rejected before decoding',()=>{const bytes=Buffer.from(png);bytes.writeUInt32BE(65535,16);bytes.writeUInt32BE(65535,20);assert.throws(()=>P.image(bytes),/32 megapixels/);});
+
+test('Markdown contains actual line breaks and escapes active syntax once',()=>{const p=P.create('Title *star* [link]');const output=markdown(p,'assets');assert.ok(output.startsWith('# Title \\*star\\* \\[link\\]\n\n'));assert.ok(!output.includes('\\n'));});
+
+test('a malicious pending-file symlink cannot overwrite another file',async t=>{const root=await temp(t),file=path.join(root,'guide.mqguide'),victim=path.join(root,'keep.txt');await fs.writeFile(victim,'preserve this');await fs.symlink(victim,file+'.pending');await assert.rejects(P.atomicWrite(file,illustrated()));assert.equal(await fs.readFile(victim,'utf8'),'preserve this');});

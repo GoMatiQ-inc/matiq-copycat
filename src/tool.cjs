@@ -15,16 +15,21 @@ exports.activate = async host => {
     await idle();if(target===file)return snapshot();const unlock=await P.lock(target);
     try {
       let loaded=await P.read(target),recovered=false;
-      try {
-        await fs.access(target+'.pending');
-        const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'An interrupted save is available.',detail:'Recover the pending project, or keep the last completed save. The existing saved project remains intact until you save.',buttons:['Recover pending save','Keep last save','Cancel'],cancelId:2,defaultId:0});
+      const candidates=[];
+      for(const suffix of ['.pending','.draft','.draft.pending']){
+        try{const stat=await fs.lstat(target+suffix);if(stat.isFile()&&!stat.isSymbolicLink())candidates.push({path:target+suffix,time:stat.mtimeMs});}catch(error){if(error.code!=='ENOENT')throw error;}
+      }
+      candidates.sort((a,b)=>b.time-a.time);
+      if(candidates.length){
+        const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Interrupted work is available.',detail:'Recover the latest draft or pending save, or keep the last completed save. Your saved guide remains intact until you save recovered work.',buttons:['Recover latest work','Keep last save','Cancel'],cancelId:2,defaultId:0});
         if(choice.response===2){await unlock();return snapshot();}
-        if(choice.response===0){loaded=await P.read(target+'.pending');recovered=true;}else await fs.unlink(target+'.pending');
-      }catch(error){if(error.code!=='ENOENT')throw error;}
+        if(choice.response===0){loaded=await P.read(candidates[0].path);if(loaded.guide.id!==JSON.parse(await fs.readFile(target,'utf8')).guide.id)throw Error('Recovery identity differs from the saved guide. Import a verified copy separately.');recovered=true;}
+        else for(const candidate of candidates)await fs.unlink(candidate.path);
+      }
       await closeProject();current=loaded;file=target;release=unlock;dirty=recovered;saveState=dirty?'unsaved':'saved';failure='';return snapshot();
     }catch(error){await unlock();throw error;}
   }
-  async function save(){if(!current)throw Error('Open or create a guide first.');saveState='saving';failure='';try{await P.atomicWrite(file,current);dirty=false;saveState='saved';}catch(error){saveState='failed';failure='Saving failed. Keep this guide open and retry: '+error.message;throw Error(failure);}return snapshot();}
+  async function save(){if(!current)throw Error('Open or create a guide first.');saveState='saving';failure='';try{await P.atomicWrite(file,current);for(const suffix of ['.draft','.draft.pending']){try{await fs.unlink(file+suffix);}catch(error){if(error.code!=='ENOENT')throw error;}}dirty=false;saveState='saved';}catch(error){saveState='failed';failure='Saving failed. Keep this guide open and retry: '+error.message;throw Error(failure);}return snapshot();}
   async function flattened(sanitized=false) {
     const result=P.clone(current);result.assets={};
     for(let i=0;i<result.guide.steps.length;i++){
@@ -66,6 +71,9 @@ exports.activate = async host => {
         const unlock=await P.lock(target);
         try{await P.atomicWrite(target,project);await closeProject();current=project;file=target;release=unlock;saveState='saved';return snapshot();}catch(error){await unlock();throw error;}
       }
+      if(name==='draft'){
+        if(!current)throw Error('Open a guide before saving a recovery draft.');const checked=P.validate(args);if(checked.guide.id!==current.guide.id)throw Error('Recovery draft identity changed. Reopen before editing.');await P.atomicWrite(file+'.draft',checked);return {saved:true};
+      }
       if(name==='save'){
         if(!current)throw Error('Open a guide first.');const checked=P.validate(args);if(checked.guide.id!==current.guide.id)throw Error('Guide ownership changed. Reopen before saving.');current=checked;dirty=true;return await save();
       }
@@ -73,7 +81,7 @@ exports.activate = async host => {
         if(!current||dirty)throw Error('Save the guide before duplicating it.');const copy=P.clone(current);copy.guide.id=randomUUID();copy.guide.title+=' (copy)';await P.atomicWrite(path.join(library,copy.guide.id+'.mqguide'),copy);return snapshot();
       }
       if(name==='delete'){
-        if(!current||dirty)throw Error('Save the current guide before deleting it.');const answer=await dialog.showMessageBox(host.window,{type:'warning',message:'Delete this local guide?',detail:'This permanently removes this library copy and its embedded screenshots. Portable exports are separate files.',buttons:['Keep guide','Delete guide'],cancelId:0,defaultId:0});if(answer.response===1){await fs.unlink(file);try{await fs.unlink(file+'.pending');}catch(e){if(e.code!=='ENOENT')throw e;}await closeProject();}return snapshot();
+        if(!current||dirty)throw Error('Save the current guide before deleting it.');const answer=await dialog.showMessageBox(host.window,{type:'warning',message:'Delete this local guide?',detail:'This permanently removes this library copy and its embedded screenshots. Portable exports are separate files.',buttons:['Keep guide','Delete guide'],cancelId:0,defaultId:0});if(answer.response===1){await fs.unlink(file);for(const suffix of ['.pending','.draft','.draft.pending']){try{await fs.unlink(file+suffix);}catch(e){if(e.code!=='ENOENT')throw e;}}await closeProject();}return snapshot();
       }
       if(name==='image'){
         const choice=await dialog.showOpenDialog(host.window,{properties:['openFile'],filters:[{name:'Screenshot',extensions:['png','jpg','jpeg']}]});if(choice.canceled)return null;
@@ -84,16 +92,18 @@ exports.activate = async host => {
         if(!current||dirty)throw Error('Save the guide before exporting.');if(!['html','markdown','pdf','editable','sanitized'].includes(args))throw Error('Choose a supported export format.');
         const extension={html:'html',markdown:'md',pdf:'pdf',editable:'mqguide',sanitized:'mqguide'}[args];
         const choice=await dialog.showSaveDialog(host.window,{defaultPath:'Guide.'+extension,filters:[{name:'Guide export',extensions:[extension]}]});if(choice.canceled)return {canceled:true};
-        const target=choice.filePath;
+        const target=choice.filePath,canonicalParent=await fs.realpath(path.dirname(target));
+        for(const root of host.protectedRoots){const base=await fs.realpath(root);const relative=path.relative(base,path.join(canonicalParent,path.basename(target)));if(relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('Choose an export destination outside application resources and managed data.');}
+        try{const existing=await fs.lstat(target);if(existing.isSymbolicLink()||!existing.isFile())throw Error('Choose a regular destination file, not a symbolic link or directory.');}catch(error){if(error.code!=='ENOENT')throw error;}
         if(args==='editable'||args==='sanitized'){await P.atomicWrite(target,args==='editable'?current:await flattened(true));return {saved:true};}
         const flat=await flattened();
-        if(args==='html'){await fs.writeFile(target,documentation(flat),{mode:0o600});return {saved:true};}
+        if(args==='html'){await P.atomicBytes(target,documentation(flat));return {saved:true};}
         if(args==='markdown'){
           const assetFolder=path.basename(target)+'.assets',folder=path.join(path.dirname(target),assetFolder);await fs.mkdir(folder,{mode:0o700});
-          try{for(const [key,asset] of Object.entries(flat.assets))await fs.writeFile(path.join(folder,key+'.png'),Buffer.from(asset.data,'base64'),{flag:'wx',mode:0o600});await fs.writeFile(target,markdown(flat,assetFolder),{mode:0o600});}catch(error){throw Error('Markdown export did not finish. Choose a new destination and retry. '+error.message);}return {saved:true};
+          try{for(const [key,asset] of Object.entries(flat.assets))await fs.writeFile(path.join(folder,key+'.png'),Buffer.from(asset.data,'base64'),{flag:'wx',mode:0o600});await P.atomicBytes(target,markdown(flat,assetFolder));}catch(error){throw Error('Markdown export did not finish. Choose a new destination and retry. '+error.message);}return {saved:true};
         }
         const output=new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});windows.add(output);
-        try{output.webContents.setWindowOpenHandler(()=>({action:'deny'}));await output.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(documentation(flat)));await output.webContents.executeJavaScript('Promise.all(Array.from(document.images,image=>image.decode()))');await fs.writeFile(target,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}),{mode:0o600});return {saved:true};}finally{output.destroy();windows.delete(output);}
+        try{output.webContents.setWindowOpenHandler(()=>({action:'deny'}));await output.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(documentation(flat)));await output.webContents.executeJavaScript('Promise.all(Array.from(document.images,image=>image.decode()))');await P.atomicBytes(target,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));return {saved:true};}finally{output.destroy();windows.delete(output);}
       }
       throw Error('Unknown Guides command. Reopen the workspace and retry.');
     }finally{working=false;}
@@ -101,6 +111,6 @@ exports.activate = async host => {
   await host.view.webContents.loadFile(path.join(host.resourceDir,'src/index.html'));
   return {
     async status(){const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');return {busy:working||dirty||rendererDirty,reason:working?'Finish the current Guides save, dialog or export.':dirty||rendererDirty?'Save the current guide before closing or restarting.':'',background:false};},
-    async dispose(){if(working||dirty)throw Error('Finish saving or exporting before closing Guides.');for(const win of windows){win.destroy();windows.delete(win);}await closeProject();disposed=true;}
+    async dispose(){if(working||dirty)throw Error('Finish saving or exporting before closing Guides.');await host.view.webContents.executeJavaScript('window.guidesDispose()');for(const win of windows){win.destroy();windows.delete(win);}await closeProject();disposed=true;}
   };
 };
