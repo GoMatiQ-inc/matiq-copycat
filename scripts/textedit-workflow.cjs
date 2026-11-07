@@ -17,6 +17,7 @@ async function openTextEdit({root,temporary}){
   closing=true;clearTimeout(timer);const errors=[];
   try{if(target){const current=identity(target.pid);assert.ok(current===null||current===target.identity,'TextEdit PID ownership changed; leave the unknown process untouched.');const wrapper=current?{process:()=>({pid:target.pid,exitCode:null,signalCode:null}),close:async()=>{if(driver.exitCode===null)driver.stdin.end('stop\n');}}:null;await cleanupDesktop({app:wrapper,owned:[target]});}}catch(error){errors.push(error);}
   try{await cleanupDesktop({app:{process:()=>driver,close:async()=>{if(driver.exitCode===null){const exited=once(driver,'exit');driver.stdin.end('stop\n');await exited;}}},owned:driverOwned});}catch(error){errors.push(error);}
+  for(const stream of [driver.stdin,driver.stdout,driver.stderr])stream.destroy();
   if(errors.length)throw new AggregateError(errors,'Owned TextEdit workflow cleanup failed. Inspect the retained fixture and exact process identities.');
  }
  timer=setTimeout(()=>{if(driver.exitCode===null)driver.kill('SIGTERM');if(target&&identity(target.pid)===target.identity)process.kill(target.pid,'SIGTERM');},60000);
