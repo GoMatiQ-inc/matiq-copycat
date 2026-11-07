@@ -18,6 +18,8 @@ Recording status is visible in Guides. Pause, stop and cancel close and await th
 
 Window movement recalculates screenshot scale and target coordinates per action. A display configuration change, sleep/lock, application/window closure, permission revocation, capture failure or capture overload stops the helper and visibly pauses capture. Actions faster than the single pending screenshot can be handled produce a warning instead of silently dropped steps. Retained screenshots use the same canonical guide assets, atomic persistence, annotations, redaction and exports as browser/manual steps.
 
+Native pending delivery is limited to four steps or 3 MiB. Storage pressure stops the mouse observer, drains already accepted steps, and saves a warning that additional actions may be missing. The status shows pending delivery and the limit; explicitly resume after reviewing saved steps.
+
 Cleanup failures remain actionable and can be retried. No native capture listener is installed at application launch, while paused, or after the helper exits. The SDK owns application shutdown; a close acknowledgement is not used as proof that the process exited.
 
 ## Reproduction and current evidence limits

@@ -76,12 +76,32 @@ async function main(){
   await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
   await start();await click();await count(3);
   await page.getByRole('button',{name:'Cancel capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture cancelled'));assert.equal((await project()).guide.steps.length,2);assert.equal((await project()).guide.steps[0].id,firstID);assert.equal((await nativeRows()).length,0);
+  if(process.env.GUIDES_PRESSURE_TEST==='1'){
+   if(executable)throw Error('The pressure fixture needs the newly built implementation; do not run it against the older signed candidate.');
+   await start();hooks=await nativeRows();
+   await page.evaluate(()=>{window.fixturePendingMaximum=0;window.guides.subscribe(state=>{window.fixturePendingMaximum=Math.max(window.fixturePendingMaximum,state.desktop?.pending||0);});});
+   await app.evaluate((_electron,root)=>{
+    const P=process.getBuiltinModule('module').createRequire(root+'/package.json')('./src/project.cjs'),original=P.atomicWrite;
+    global.fixtureRestoreAtomic=()=>{P.atomicWrite=original;};
+    P.atomicWrite=async(...args)=>{await new Promise(resolve=>setTimeout(resolve,1200));return original(...args);};
+   },root);
+   try{
+    for(let i=0;i<8;i++)await click();
+    await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'),null,{timeout:20000});
+    p=await project();assert.ok(p.capture.issues.some(reason=>reason.includes('pending delivery reached its limit')));
+    assert.ok(p.guide.steps.length>2&&p.guide.steps.length<=6,'Only accepted bounded native steps may be retained.');
+    assert.equal(p.guide.steps[0].id,firstID);assert.equal(await page.evaluate(()=>window.fixturePendingMaximum),4);
+    const state=await page.evaluate(()=>window.guides.request('state'));assert.equal(state.desktop.pending,0);assert.equal(state.desktop.bytes,0);
+    for(const hook of hooks)await verifyStopped(hook);
+   }finally{await app.evaluate(()=>{global.fixtureRestoreAtomic();delete global.fixtureRestoreAtomic;});}
+   await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
+  }
   await start();hooks=await nativeRows();write('quit');
   await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));
   p=await project();assert.ok(p.capture.issues.some(reason=>/closed|screen/i.test(reason)));for(const hook of hooks)await verifyStopped(hook);
   await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
   if(!executable){const status=await app.evaluate(()=>global.fixtureInstance.status());assert.equal(status.busy,false);}
-  proof={result:'passed',packaged:!!executable,sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','native process absence verified'],qualification:executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
+  proof={result:'passed',packaged:!!executable,slowStoragePressure:process.env.GUIDES_PRESSURE_TEST==='1',sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','native process absence verified'],qualification:executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
   await closeNormally();
  }finally{
   if(app){owned=Array.from(new Map([...owned,...await runtimeRows()].map(row=>[row.pid,row])).values());}

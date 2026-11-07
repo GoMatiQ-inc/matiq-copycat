@@ -10,9 +10,10 @@ exports.activate = async host => {
   const library=path.join(host.dataDir,'guides');await fs.mkdir(library,{recursive:true,mode:0o700});
   let current=null,file=null,release=null,dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
   const windows=new Set();let bridge=null,browserOwner=null,finishPending=false,stateRevision=0,pendingInterruption=null,quiesce=null;
-  let desktopChoices=[],desktop=null,desktopQueue=Promise.resolve(),desktopAccepting=false,desktopCutoff=0,desktopInterrupting=null;
+  let desktopChoices=[],desktop=null,desktopQueue=Promise.resolve(),desktopAccepting=false,desktopCutoff=0,desktopInterrupting=null,desktopPending=0,desktopPendingBytes=0;
+  const desktopLimits={steps:4,bytes:3*1024*1024};
   const activeCapture=()=>current?.capture&&['recording','paused'].includes(current.capture.phase);
-  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure,desktop:!!desktop,bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
+  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure,desktop:{active:!!desktop,accepting:desktopAccepting,pending:desktopPending,bytes:desktopPendingBytes,limits:desktopLimits},bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
   const notify=()=>{host.emit('com.matiq.guides:state',snapshot());bridge?.broadcast({type:'status',status:browserStatus()});};
   function browserStatus(){return {revision:stateRevision,receiver:bridge?.receiver,instance:app.getName(),guide:current?{id:current.guide.id,title:current.guide.title}:null,capture:current?.capture?.source==='desktop'?null:current?.capture||null,finishPending};}
   async function captureWrite(next){saveState='saving';notify();try{await P.atomicWrite(file,next);current=next;stateRevision++;saveState='saved';dirty=false;failure='';notify();}catch(error){saveState='failed';failure='Capture was not saved. Reconnect and retry the pending step: '+error.message;notify();throw Error(failure);}}
@@ -49,6 +50,7 @@ exports.activate = async host => {
   function desktopInterrupted(error){
     desktopAccepting=false;
     if(desktopInterrupting)return;
+    failure='Desktop capture stopped: '+error.message;notify();
     desktopInterrupting=(async()=>{
       try{
         await stopDesktop();
@@ -67,11 +69,16 @@ exports.activate = async host => {
     try{
       desktop=await D.start(host,choice.id,choice.pid,event=>{
         if(!desktopAccepting&&(!desktop||event.at>desktopCutoff))return;
+        const bytes=Buffer.byteLength(JSON.stringify(event));
+        if(desktopPending>=desktopLimits.steps||desktopPendingBytes+bytes>desktopLimits.bytes){
+          desktopInterrupted(Error('Native pending delivery reached its limit (4 steps or 3 MiB). Capture stopped; some actions may be missing. Review saved steps and resume more slowly after storage recovers.'));return;
+        }
+        desktopPending++;desktopPendingBytes+=bytes;
         desktopQueue=desktopQueue.then(async()=>{
           const capture=current.capture;
           const result=C.append(current,{...event,id:randomUUID(),session:capture.id,scope:capture.scope,sequence:capture.receipts.length});
           try{await captureWrite(result.project);}catch(error){current=result.project;stateRevision++;throw error;}
-        }).catch(error=>{queueMicrotask(()=>desktopInterrupted(error));});
+        }).catch(error=>{queueMicrotask(()=>desktopInterrupted(error));}).finally(()=>{desktopPending--;desktopPendingBytes-=bytes;notify();});
       },desktopInterrupted);
     }catch(error){desktopAccepting=false;throw error;}
   }

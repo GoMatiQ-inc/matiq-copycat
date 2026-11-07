@@ -1,6 +1,6 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let captureStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,busy=false,draftTimer=null;
+let captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,busy=false,draftTimer=null;
 window.guidesDispose=()=>{clearTimeout(draftTimer);};
 window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
@@ -14,17 +14,20 @@ const historySnapshot=()=>({...project,guide:clone(project.guide),assets:{...pro
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy||captureStatus&&['recording','paused'].includes(captureStatus.phase))return;remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
-function accept(result){if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
+function accept(result){if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
 async function list(){rows=await request('list');drawLibrary();}
 function drawLibrary(){const target=$('guide-list');target.replaceChildren();const query=$('search').value.toLowerCase();for(const row of rows.filter(r=>(r.title+' '+r.description).toLowerCase().includes(query))){const button=document.createElement('button');button.className='guide-card';button.disabled=!!row.invalid;const title=document.createElement('strong');title.textContent=row.title;const detail=document.createElement('span');detail.textContent=`${row.steps} steps`;button.append(title,detail);button.onclick=()=>run(async()=>accept(await request('open',row.id)));target.append(button);}if(!target.childElementCount)target.textContent='No matching guides. Create a guide to begin.';}
-function draw(){
+function draw(){drawContent();if(busy)document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);}
+function drawContent(){
   $('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
   if(!project){drawLibrary();return;}
   const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
   for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
   $('capture-pause').disabled=captureStatus?.phase!=='recording';$('capture-resume').disabled=captureStatus?.phase!=='paused';$('capture-stop').disabled=!active;$('capture-cancel').disabled=!active;
   $('desktop-start').disabled=!!active&&!(captureStatus.source==='desktop'&&captureStatus.phase==='paused');$('desktop-list').disabled=!!active&&captureStatus.phase==='recording';
-  $('capture-status').textContent=(captureStatus?`${captureStatus.source==='desktop'?'Selected-window desktop':'Browser'} capture ${captureStatus.phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:'Bridge disabled.')+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'');
+  const phase=captureStatus?.source==='desktop'&&captureStatus.phase==='recording'?(desktopStatus?.accepting?(desktopStatus.active?'recording':'starting'):'stopping'):captureStatus?.phase;
+  const pending=captureStatus?.source==='desktop'?` Native pending delivery: ${desktopStatus?.pending||0} steps; limit 4 steps or 3 MiB.`:'';
+  $('capture-status').textContent=(captureStatus?`${captureStatus.source==='desktop'?'Selected-window desktop':'Browser'} capture ${phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:'Bridge disabled.')+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'')+pending;
   $('title').value=project.guide.title;$('description').value=project.guide.description;
   $('steps').replaceChildren();for(const [i,s] of project.guide.steps.entries()){const li=document.createElement('li'),b=document.createElement('button');b.textContent=`${i+1}. ${s.instruction||'Untitled step'}`;b.setAttribute('aria-current',String(s.id===selected));b.onclick=()=>{selected=s.id;draw();};li.append(b);$('steps').append(li);}
   const current=step();$('step-editor').hidden=!current;if(!current)return;
