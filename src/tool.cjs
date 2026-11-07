@@ -5,7 +5,7 @@ const {app, dialog, BrowserWindow, nativeImage} = require('electron');
 const C=require('./capture.cjs'),B=require('./bridge.cjs'),D=require('./desktop.cjs');
 const identities=require('../extension/identities.json');
 const P = require('./project.cjs');
-const {documentation, markdown} = require('./export.cjs');
+const {documentation,markdown,exportRequest,warningSteps}=require('./export.cjs');
 exports.activate = async host => {
   const library=path.join(host.dataDir,'guides');await fs.mkdir(library,{recursive:true,mode:0o700});
   let current=null,file=null,release=null,dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
@@ -105,7 +105,7 @@ exports.activate = async host => {
   }
   async function save(){if(!current)throw Error('Open or create a guide first.');saveState='saving';failure='';try{await P.atomicWrite(file,current);for(const suffix of ['.draft','.draft.pending']){try{await fs.unlink(file+suffix);}catch(error){if(error.code!=='ENOENT')throw error;}}dirty=false;stateRevision++;saveState='saved';}catch(error){saveState='failed';failure='Saving failed. Keep this guide open and retry: '+error.message;throw Error(failure);}return snapshot();}
   async function flattened(sanitized=false) {
-    const result=P.clone(current);result.assets={};delete result.capture;if(current.capture?.issues.length)result.guide.description+='\n\nCapture review warnings:\n'+current.capture.issues.join('\n');
+    const result=P.clone(current);result.assets={};delete result.capture;
     for(let i=0;i<result.guide.steps.length;i++){
       const s=result.guide.steps[i],original=current.guide.steps[i];
       if(s.asset){
@@ -115,10 +115,9 @@ exports.activate = async host => {
         s.asset=P.addImage(result,Buffer.from(data.slice(22),'base64'));s.annotations=[];s.crop=null;
       }
       s.source=null;
-      const redacted=original.annotations.some(a=>a.type==='redact');
-      if(sanitized||redacted)s.notes='';
-      if(redacted)s.instruction=`Step ${i+1} — review this instruction before sharing`;
+      if(sanitized){s.notes='';s.timestamp=0;}
     }
+    if(sanitized)result.guide.steps.push(...warningSteps(current.capture?.issues||[],500-result.guide.steps.length));
     return P.compact(result);
   }
   host.handle('com.matiq.guides:request',async(name,args)=>{
@@ -187,21 +186,21 @@ exports.activate = async host => {
         if(decoded.isEmpty()||size.width*size.height>32000000)throw Error('Choose a valid screenshot under 32 megapixels.');return {key:P.hash(bytes),asset};
       }
       if(name==='export'){
-        if(!current||dirty)throw Error('Save the guide before exporting.');if(!['html','markdown','pdf','editable','sanitized'].includes(args))throw Error('Choose a supported export format.');
-        const extension={html:'html',markdown:'md',pdf:'pdf',editable:'mqguide',sanitized:'mqguide'}[args];
+        if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Save the guide before exporting.');const format=exportRequest(current,args,stateRevision);
+        const extension={html:'html',markdown:'md',pdf:'pdf',editable:'mqguide',sanitized:'mqguide'}[format];
         const choice=await dialog.showSaveDialog(host.window,{defaultPath:'Guide.'+extension,filters:[{name:'Guide export',extensions:[extension]}]});if(choice.canceled)return {canceled:true};
         const target=choice.filePath,canonicalParent=await fs.realpath(path.dirname(target));
         for(const root of [...host.protectedRoots,path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge')]){let base;try{base=await fs.realpath(root);}catch(error){if(error.code==='ENOENT')continue;throw error;}const relative=path.relative(base,path.join(canonicalParent,path.basename(target)));if(relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)))throw Error('Choose an export destination outside application resources and managed data.');}
         try{const existing=await fs.lstat(target);if(existing.isSymbolicLink()||!existing.isFile())throw Error('Choose a regular destination file, not a symbolic link or directory.');}catch(error){if(error.code!=='ENOENT')throw error;}
-        if(args==='editable'||args==='sanitized'){await P.atomicWrite(target,args==='editable'?current:await flattened(true));return {saved:true};}
-        const flat=await flattened();
-        if(args==='html'){await P.atomicBytes(target,documentation(flat));return {saved:true};}
-        if(args==='markdown'){
+        if(format==='editable'||format==='sanitized'){await P.atomicWrite(target,format==='editable'?current:await flattened(true));return {saved:true};}
+        const flat=await flattened(),warnings=current.capture?.issues||[];
+        if(format==='html'){await P.atomicBytes(target,documentation(flat,warnings));return {saved:true};}
+        if(format==='markdown'){
           const assetFolder=path.basename(target)+'.assets',folder=path.join(path.dirname(target),assetFolder);await fs.mkdir(folder,{mode:0o700});
-          try{for(const [key,asset] of Object.entries(flat.assets))await fs.writeFile(path.join(folder,key+'.png'),Buffer.from(asset.data,'base64'),{flag:'wx',mode:0o600});await P.atomicBytes(target,markdown(flat,assetFolder));}catch(error){throw Error('Markdown export did not finish. Choose a new destination and retry. '+error.message);}return {saved:true};
+          try{for(const [key,asset] of Object.entries(flat.assets))await fs.writeFile(path.join(folder,key+'.png'),Buffer.from(asset.data,'base64'),{flag:'wx',mode:0o600});await P.atomicBytes(target,markdown(flat,assetFolder,warnings));}catch(error){throw Error('Markdown export did not finish. Choose a new destination and retry. '+error.message);}return {saved:true};
         }
         const output=new BrowserWindow({show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});windows.add(output);
-        try{output.webContents.setWindowOpenHandler(()=>({action:'deny'}));await output.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(documentation(flat)));await output.webContents.executeJavaScript('Promise.all(Array.from(document.images,image=>image.decode()))');await P.atomicBytes(target,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));return {saved:true};}finally{output.destroy();windows.delete(output);}
+        try{output.webContents.setWindowOpenHandler(()=>({action:'deny'}));await output.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(documentation(flat,warnings)));await output.webContents.executeJavaScript('Promise.all(Array.from(document.images,image=>image.decode()))');await P.atomicBytes(target,await output.webContents.printToPDF({printBackground:true,preferCSSPageSize:true}));return {saved:true};}finally{output.destroy();windows.delete(output);}
       }
       throw Error('Unknown Guides command. Reopen the workspace and retry.');
     }finally{await endWork();}

@@ -1,6 +1,6 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,busy=false,draftTimer=null;
+let captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,busy=false,draftTimer=null;
 window.guidesDispose=()=>{clearTimeout(draftTimer);};
 window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
@@ -9,8 +9,8 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const step=()=>project?.guide.steps.find(s=>s.id===selected);
 function message(error=''){$('message').textContent=error.message||error;}
 function state(label){$('save-state').textContent=label;}
-function changed(){window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)request('draft',project).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
-const historySnapshot=()=>({...project,guide:clone(project.guide),assets:{...project.assets}});
+function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)request('draft',project).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
+const historySnapshot=()=>({...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}});
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy||captureStatus&&['recording','paused'].includes(captureStatus.phase))return;remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
@@ -30,9 +30,23 @@ function drawContent(){
   $('capture-status').textContent=(captureStatus?`${captureStatus.source==='desktop'?'Selected-window desktop':'Browser'} capture ${phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:'Bridge disabled.')+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'')+pending;
   $('title').value=project.guide.title;$('description').value=project.guide.description;
   $('steps').replaceChildren();for(const [i,s] of project.guide.steps.entries()){const li=document.createElement('li'),b=document.createElement('button');b.textContent=`${i+1}. ${s.instruction||'Untitled step'}`;b.setAttribute('aria-current',String(s.id===selected));b.onclick=()=>{selected=s.id;draw();};li.append(b);$('steps').append(li);}
+  drawCaptureReview(active);drawSharingReview(active);
   const current=step();$('step-editor').hidden=!current;if(!current)return;
   $('instruction').value=current.instruction;$('notes').value=current.notes;drawImage().catch(message);
 }
+function drawCaptureReview(active){
+ const list=$('capture-review');list.replaceChildren();if(!project.capture?.issues.length)return;const help=document.createElement('p');help.textContent='Capture warnings remain until you review them. After stopping, edit sensitive details or explain a correction. Remove a warning only after reviewing and correcting the missing action.';list.append(help);
+ project.capture.issues.forEach((reason,index)=>{const label=document.createElement('label'),input=document.createElement('textarea'),remove=document.createElement('button');label.textContent=`Capture warning ${index+1}`;input.value=reason;input.maxLength=1000;input.rows=2;input.disabled=!!active;input.oninput=()=>{if(busy||active)return;remember();project.capture.issues[index]=input.value;changed();};label.append(input);remove.textContent='Mark reviewed and remove';remove.setAttribute('aria-label',`Mark capture warning ${index+1} reviewed and remove`);remove.disabled=!!active;remove.onclick=()=>mutation(()=>project.capture.issues.splice(index,1));list.append(label,remove);});
+}
+function drawSharingReview(active){
+ const redacted=project.guide.steps.map((step,index)=>({step,index})).filter(({step})=>step.annotations.some(a=>a.type==='redact'));
+ $('sharing-review').hidden=!redacted.length&&!project.capture?.issues.length;$('sharing-reviewed').checked=reviewedRevision===modelRevision&&!window.guidesDirty;$('sharing-reviewed').disabled=!!active||window.guidesDirty;
+ const list=$('sharing-text');list.replaceChildren();const title=document.createElement('h3'),description=document.createElement('p');title.textContent=project.guide.title;description.textContent=project.guide.description;list.append(title,description);
+ if(project.capture?.issues.length){const heading=document.createElement('h3');heading.textContent='Capture review warnings';list.append(heading);for(const reason of project.capture.issues){const line=document.createElement('p');line.textContent=reason;list.append(line);}}
+ for(const {step,index} of redacted){const heading=document.createElement('h3'),notes=document.createElement('p');heading.textContent=`${index+1}. ${step.instruction}`;notes.textContent=step.notes||'No notes.';list.append(heading,notes);}
+ $('sharing-status').textContent=window.guidesDirty?'Save your edits, then review the current wording again.':$('sharing-reviewed').checked?'This saved revision is reviewed. Any edit or new save requires another review.':'Review is required before read-only or sanitized export. Editable projects retain originals.';
+}
+$('sharing-reviewed').onchange=()=>{reviewedRevision=$('sharing-reviewed').checked&&!window.guidesDirty?modelRevision:null;drawSharingReview(captureStatus&&['recording','paused'].includes(captureStatus.phase));};
 async function drawImage(){const token=++generation,s=step(),canvas=$('screenshot');if(!s?.asset){canvas.hidden=true;$('screenshot-status').textContent='No screenshot. Choose Replace screenshot to add one.';return;}const image=await render(s,project.assets[s.asset],{original:true});if(token!==generation)return;canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);if(s.crop){const c=s.crop,ctx=canvas.getContext('2d');ctx.strokeStyle='#dc7130';ctx.lineWidth=3;ctx.strokeRect(c.x*canvas.width,c.y*canvas.height,c.width*canvas.width,c.height*canvas.height);}$('screenshot-status').textContent=s.crop?'Crop shown in orange. Exports use the cropped region.':'Preview includes opaque redactions. Editable projects still retain the original screenshot.';}
 for(const field of ['title','description','instruction','notes'])$(field).addEventListener('input',()=>{if(busy)return;const obj=['title','description'].includes(field)?project.guide:step();if(!obj)return;remember();obj[field]=$(field).value;changed();if(field==='instruction'){const button=$('steps').querySelector('[aria-current=true]');if(button)button.textContent=`${project.guide.steps.indexOf(obj)+1}. ${obj.instruction||'Untitled step'}`;}});
 $('search').oninput=drawLibrary;
@@ -58,7 +72,7 @@ const point=e=>{const b=canvas.getBoundingClientRect();return{x:Math.max(0,Math.
 canvas.onpointerdown=e=>{start=point(e);canvas.setPointerCapture(e.pointerId);};
 canvas.onpointerup=e=>{if(!start)return;const end=point(e),rect={x:Math.min(start.x,end.x),y:Math.min(start.y,end.y),width:Math.abs(start.x-end.x),height:Math.abs(start.y-end.y)};start=null;try{region(rect);}catch(error){message(error);}};
 canvas.onpointercancel=()=>{start=null;};
-$('export').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your changes before exporting.');const result=await request('export',$('export-format').value);if(result.saved)message('Export saved. Open it independently and review sensitive information before sharing.');});
+$('export').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your changes before exporting.');if($('export-format').value!=='editable'&&!$('sharing-review').hidden&&reviewedRevision!==modelRevision){$('sharing-review').open=true;$('sharing-review').querySelector('summary').focus();throw Error('Review the saved sharing text and capture warnings before exporting. Edit sensitive wording, save, then confirm the current review.');}const result=await request('export',{format:$('export-format').value,...(reviewedRevision===modelRevision?{reviewedRevision}:{})});if(result.saved)message('Export saved. Open it independently and review sensitive information before sharing.');});
 window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
 window.guides.subscribe(result=>{if(!window.guidesDirty)accept(result);else if(result.error)message(result.error);});
 $('bridge-enable').onclick=()=>run(async()=>accept(await request('bridge-enable')));

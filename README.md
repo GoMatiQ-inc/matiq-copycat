@@ -18,7 +18,7 @@ The adapter loads src/index.html in host.view.webContents, prefixes renderer com
 
 See docs/PROJECT-FORMAT.md. Save locally before switching or exporting. A portable `.mqguide` contains the editable guide and embedded screenshot assets. Import preserves stable identities and rejects an existing guide ID rather than overwriting work; duplicate explicitly for a distinct copy.
 
-Editable projects retain originals. HTML, Markdown/images and PDF export use rasterized crop/annotations/redactions, remove notes and replace instructions on redacted steps for review. Sanitized sharing projects discard originals, source and notes, and replace redacted-step instructions for review. Always manually inspect text and visible pixels before sharing. No masking guarantee is made.
+Editable projects retain originals. HTML, Markdown/images and PDF burn crop/annotations/redactions into pixels and preserve reviewed instructions and notes. If a guide has redactions or capture warnings, review its saved sharing text before export; every edit or new save invalidates that review. Sanitized sharing projects retain reviewed instructions but discard original step notes, original screenshots, source/capture context and interaction timestamps. Capture warnings become explicit manual review-note steps. Always manually inspect text and visible pixels before sharing. No masking guarantee is made.
 
 ## Release contract
 
