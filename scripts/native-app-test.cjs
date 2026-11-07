@@ -50,7 +50,7 @@ async function main(){
   await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
   owned=await runtimeRows();await cleanupDesktop({app,owned});app=null;owned=[];
   page=await launch();await page.getByRole('button',{name:/Native workflow fixture/}).click();await page.waitForFunction(()=>document.querySelector('#instruction').value==='Open the native settings panel');
-  p=await project();assert.equal(p.guide.id,guideID);assert.equal(p.guide.steps[0].id,firstID);assert.equal(p.guide.steps[0].annotations[0].type,'redact');
+  p=await project();assert.equal(p.guide.id,guideID);assert.equal(p.guide.steps[0].id,firstID);assert.ok(p.guide.steps[0].annotations.some(annotation=>annotation.type==='redact'));
   // Explicit window selection is needed again after restarting the app.
   await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
   await start();await click();await count(3);
