@@ -1,7 +1,8 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,busy=false,draftTimer=null;
+let captureStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,busy=false,draftTimer=null;
 window.guidesDispose=()=>{clearTimeout(draftTimer);};
+window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
 window.guidesRender=async({step,asset})=>(await render(step,asset)).toDataURL('image/png');
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -11,14 +12,17 @@ function state(label){$('save-state').textContent=label;}
 function changed(){window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)request('draft',project).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
 const historySnapshot=()=>({...project,guide:clone(project.guide),assets:{...project.assets}});
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
-function mutation(fn){if(busy)return;remember();fn();changed();draw();}
-async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button').forEach(b=>b.disabled=false);}}
-function accept(result){project=result.project;window.guidesDirty=result.saveState!=='saved';state(result.saveState==='saved'?'Saved':result.saveState==='failed'?'Failed to save':'Unsaved');selected=project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
+function mutation(fn){if(busy||captureStatus&&['recording','paused'].includes(captureStatus.phase))return;remember();fn();changed();draw();}
+async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
+function accept(result){if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
 async function list(){rows=await request('list');drawLibrary();}
 function drawLibrary(){const target=$('guide-list');target.replaceChildren();const query=$('search').value.toLowerCase();for(const row of rows.filter(r=>(r.title+' '+r.description).toLowerCase().includes(query))){const button=document.createElement('button');button.className='guide-card';button.disabled=!!row.invalid;const title=document.createElement('strong');title.textContent=row.title;const detail=document.createElement('span');detail.textContent=`${row.steps} steps`;button.append(title,detail);button.onclick=()=>run(async()=>accept(await request('open',row.id)));target.append(button);}if(!target.childElementCount)target.textContent='No matching guides. Create a guide to begin.';}
 function draw(){
   $('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
-  if(!project){list().catch(message);return;}
+  if(!project){drawLibrary();return;}
+  const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
+  for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
+  $('capture-status').textContent=(captureStatus?`Capture ${captureStatus.phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:'Bridge disabled.')+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'');
   $('title').value=project.guide.title;$('description').value=project.guide.description;
   $('steps').replaceChildren();for(const [i,s] of project.guide.steps.entries()){const li=document.createElement('li'),b=document.createElement('button');b.textContent=`${i+1}. ${s.instruction||'Untitled step'}`;b.setAttribute('aria-current',String(s.id===selected));b.onclick=()=>{selected=s.id;draw();};li.append(b);$('steps').append(li);}
   const current=step();$('step-editor').hidden=!current;if(!current)return;
@@ -29,11 +33,11 @@ for(const field of ['title','description','instruction','notes'])$(field).addEve
 $('search').oninput=drawLibrary;
 $('new').onclick=()=>run(async()=>accept(await request('new')));
 $('import').onclick=()=>run(async()=>accept(await request('import')));
-$('save').onclick=()=>run(async()=>{const version=editVersion;state('Saving');try{const result=await request('save',clone(project));if(editVersion===version){window.guidesDirty=false;state('Saved');message(result.error);}else state('Unsaved');}catch(error){state('Failed to save');throw error;}});
-$('back').onclick=$('library-nav').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your guide before returning to the library.');project=null;selected=null;draw();});
-$('privacy-nav').onclick=()=>{$('privacy').hidden=!$('privacy').hidden;};
+$('save').onclick=()=>run(async()=>{const version=editVersion;state('Saving');try{const result=await request('save',clone(project));if(editVersion===version){modelRevision=Math.max(modelRevision,result.revision??modelRevision);window.guidesDirty=false;state('Saved');message(result.error);}else state('Unsaved');}catch(error){state('Failed to save');throw error;}});
+$('back').onclick=$('library-nav').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your guide before returning to the library.');await list();project=null;selected=null;draw();});
+$('privacy-inline').onclick=$('privacy-nav').onclick=()=>{$('privacy').hidden=!$('privacy').hidden;};
 $('duplicate-guide').onclick=()=>run(async()=>{await request('duplicate');message('Saved copy added to your library.');});
-$('delete-guide').onclick=()=>run(async()=>accept(await request('delete')));
+$('delete-guide').onclick=()=>run(async()=>{accept(await request('delete'));await list();});
 $('add-step').onclick=()=>mutation(()=>{const value={id:crypto.randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]};project.guide.steps.push(value);selected=value.id;});
 $('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());project=past.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
 $('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());project=future.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
@@ -51,4 +55,8 @@ canvas.onpointerup=e=>{if(!start)return;const end=point(e),rect={x:Math.min(star
 canvas.onpointercancel=()=>{start=null;};
 $('export').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your changes before exporting.');const result=await request('export',$('export-format').value);if(result.saved)message('Export saved. Open it independently and review sensitive information before sharing.');});
 window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}});
+window.guides.subscribe(result=>{if(!window.guidesDirty)accept(result);else if(result.error)message(result.error);});
+$('bridge-enable').onclick=()=>run(async()=>accept(await request('bridge-enable')));
+$('bridge-install').onclick=()=>run(async()=>{await request('bridge-install',$('bridge-browser').value);message('Native bridge registered. Load the matching browser extension explicitly, then connect and select this instance.');});
+for(const command of ['pause','resume','stop','cancel'])$('capture-'+command).onclick=()=>run(async()=>accept(await request('capture-control',command)));
 await run(async()=>{accept(await request('state'));await list();});

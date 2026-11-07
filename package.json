@@ -10,12 +10,17 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "package": "electron-builder --publish never",
+    "package": "electron-builder --mac --arm64 --publish never",
     "tool:validate": "matiq-tool validate",
     "tool:pack": "matiq-tool pack --output tool.mqt",
     "tool:pack-app": "matiq-tool pack-app",
     "test": "node --test test/*.test.cjs",
-    "test:desktop": "node scripts/desktop-test.cjs"
+    "test:desktop": "node scripts/desktop-test.cjs",
+    "build:native": "node scripts/build-native.cjs",
+    "build:extensions": "node scripts/build-extensions.cjs",
+    "test:browser": "node scripts/browser-test.cjs",
+    "test:native": "python3 scripts/test-native.py",
+    "prepackage": "node scripts/build-native.cjs"
   },
   "dependencies": {
     "@matiq-solutions/runtime": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-runtime-0.1.3.tgz",
@@ -50,7 +55,8 @@
       "package.json",
       "LICENSE",
       "NOTICE",
-      "docs/PROJECT-FORMAT.md"
+      "docs/*.md",
+      "extension/identities.json"
     ],
     "directories": {
       "output": "dist"
@@ -60,6 +66,12 @@
         "provider": "github",
         "owner": "GoMatiQ-inc",
         "repo": "matiq-guides"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "native/guides-bridge",
+        "to": "native/guides-bridge"
       }
     ]
   },

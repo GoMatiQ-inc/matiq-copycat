@@ -1,0 +1,41 @@
+# Browser companions
+
+One shared implementation lives in `extension/shared`. The build generates only the manifest/background-loader differences required by Chrome, Edge and Firefox. Version 0.1.0 is development software: no store listing, signed Firefox distribution, real Chrome/Edge/Firefox packaged acceptance or installed macOS browser journey has passed yet.
+
+## Build and development installation
+
+Use the pinned Node runtime and repository lockfile. Run `npm ci`, then `npm run build:extensions` on the development host under its storage guard. Python 3 with zipfile/zlib is required for deterministic ZIP creation. Files are sorted, timestamps and modes fixed. Record Node, Python and zlib versions when comparing builds. Output is `extensions-dist/matiq-guides-<browser>-0.1.0.zip` and an unpacked directory per browser. These are unsigned developer packages, not store-approved releases.
+
+For Chrome, open `chrome://extensions`, enable Developer mode, choose Load unpacked and select `extensions-dist/chrome`. For Edge use `edge://extensions` and `extensions-dist/edge`. For Firefox, use `about:debugging#/runtime/this-firefox`, Load Temporary Add-on, then select `extensions-dist/firefox/manifest.json`. Temporary Firefox add-ons do not survive browser restart; release distribution requires a genuinely Mozilla-signed package. Do not disable signing protections in a production browser profile.
+
+The Chromium public development key pins the unpacked extension identity. Firefox uses `guides@matiqinc.com`. Store-assigned identities must be reviewed and allowlisted before store release; do not assume an Edge/Chrome store identity matches an unpacked build. Opening the extension never installs a desktop tool or marketplace package.
+
+## Native bridge setup on macOS
+
+Build the native helper with `npm run build:native` on the authorized Mac. The release build must sign/notarize the application and its native resources through the qualified SDK signing helpers. The helper targets arm64 macOS 14.2 for linking; this minimum is not a workflow qualification claim for untested macOS versions. The helper is a standalone native executable; end users do not install Node or Python.
+
+In Guides, open/create a guide, enable its browser bridge, choose Chrome, Edge or Firefox, and explicitly install the approved native bridge. Registration is user-local and restricts allowed extension identities. The installer copies immutable versioned native bytes into a shared integration directory, records standalone/suite consumers and preserves compatible existing registrations. Both forms use the same integration. Updates cannot replace unknown registrations or different bytes under an existing bridge version. Application uninstall must not remove this shared directory or another form's registration. User projects are preserved separately.
+
+Then open the extension from the intended browser tab, connect, explicitly select the receiving application, and start capture into the open guide. The desktop asks for confirmation of the guide and origin. Only one compatible standalone/suite adapter can own Guides at a time, enforced by SDK 0.1.3; close it in the other form before opening here. A second browser cannot compete for an owned capture. Disconnect explicitly before handing ownership to another browser.
+
+## Scope and permissions
+
+Core permissions: activeTab, scripting, storage and nativeMessaging. There are no persistent host permissions or broad site access grants. Toolbar invocation grants temporary access to the selected HTTP(S) tab. Same-origin navigation retains that grant. If navigation revokes access, capture pauses visibly; open the extension on the new page and explicitly resume. Changing the active tab pauses capture; choose the intended tab and resume explicitly. Browser-internal pages, extension pages, local files and embedded frames are unsupported. Frame presence produces a saved warning. Closed shadow controls and other unsupported interactions still need further qualification.
+
+Chrome/Edge have a service worker; Firefox loads the same implementation as background scripts. The native host uses framed JSON on stdio and a private authenticated Unix socket to the receiving desktop adapter. There is no localhost HTTP control API. Both ends bound message sizes and validate protocol/session/sequence ownership. Page content cannot execute native commands or read files.
+
+## Privacy, buffering and failures
+
+The extension captures screenshots and structured actions only while active in the selected scope. It has no raw keyboard, password or clipboard listener. Form instructions never contain field values. Sources retain HTTP(S) origins only, without paths, credentials, query strings or fragments. Control labels are bounded and filtered; screenshot pixels can still contain sensitive information. Always review and redact before sharing.
+
+Screenshots are captured as high-quality JPEG. Oversized frames are resized to fit the bounded native protocol. Scrolling and normal browser zoom use viewport geometry; pinch zoom, dynamic transitions, rapid repeated actions and browser-specific limits need additional native acceptance tests. Unreliable screenshots/targets pause capture or produce an explicit review warning rather than a false completion claim. Double-click instructions currently require manual review.
+
+Acknowledgements follow durable desktop persistence. A pending queue is limited to four steps or 3 MiB, plus one current in-memory baseline screenshot while recording. The queue survives service-worker restart in local extension storage and is removed as steps are acknowledged. Disconnect immediately stops capture hooks. Reconnect and select the same receiving session to reconcile acknowledged sequences; explicitly resume before more capture. Queue overflow pauses recording visibly. Discarding pending steps is explicit and leaves a warning in the desktop guide. Cancelling while disconnected remains pending until the desktop receives cancellation.
+
+Firefox declares browsingActivity, websiteActivity and websiteContent because Mozilla counts transfer to a local native application as data transmission. There is no upload, analytics, telemetry, remote favicon request, cloud processing, model or account requirement.
+
+## Current evidence and limits
+
+`npm run test:browser` uses an actual Chromium extension, actual toolbar UI, trusted browser input, screenshots, native messaging and the real SDK standalone workspace on Linux. Its native transport launcher and desktop approval choices are controlled fixtures. It exercises browser navigation, scrolling, safe form descriptions, pause/resume, actual native-host exit after a deliberately dropped durable acknowledgement, deduplicated reconnect, desktop stop and a second cancelled session. It also disposes a running adapter, awaits browser-hook acknowledgement and verifies its recoverable paused checkpoint. It independently verifies owned process/listener cleanup. This does not qualify Chrome, Edge, Firefox or a packaged macOS application.
+
+`npm run test:native` exercises the actual compiled macOS stdio helper and validates framed authentication, Unicode transport, malformed-size rejection and cleanup. It refuses to adopt an existing active bridge. Native helper tests alone do not qualify browser installation, store signing or packaged workflows.

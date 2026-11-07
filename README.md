@@ -4,11 +4,11 @@ Local illustrated workflow documentation, using the MatiQ Solutions desktop SDK 
 
 ## Delivery state
 
-Development implementation. No target, capture adapter, extension, signed release, marketplace installation or update journey is qualified yet. The current slice implements local manual guide editing and export paths. Capture is visibly unavailable until implemented and qualified. Do not infer product readiness from unit tests or the SDK-generated foundation.
+Development implementation. No target, capture adapter, extension, signed release, marketplace installation or update journey is qualified yet. The current implementation includes local manual editing, export paths and a shared browser companion/native bridge. A real Chromium development journey and the compiled macOS bridge component have passed targeted checks; packaged browser/native workflows remain unqualified. Native desktop capture is not connected yet. Do not infer product readiness from unit tests or the SDK-generated foundation.
 
 ## Develop
 
-Node >=22.12. `npm ci`, `npm test`, `npm start`. Follow applicable storage/lifecycle controls before installs, tests, desktop sessions or builds. Dependency URLs pin the immutable sdk-v0.1.3 SDK/runtime/shell archives. Do not substitute platform-feature SDKs or upgrade Electron independently.
+Node >=22.12. `npm ci`, `npm test`, `npm start`. See docs/EXTENSIONS.md for browser development, scope, bridge setup and evidence limits. Follow applicable storage/lifecycle controls before installs, tests, desktop sessions or builds. Dependency URLs pin the immutable sdk-v0.1.3 SDK/runtime/shell archives. Do not substitute platform-feature SDKs or upgrade Electron independently.
 
 The adapter loads src/index.html in host.view.webContents, prefixes renderer commands with com.matiq.guides, uses host.window only as a native-dialog parent and stores the library under host.dataDir/guides. Native permissions are separate from manifest capabilities. The SDK runtime supplies sandboxing, trusted-frame checks, shell styling and compatible tool ownership leases.
 
