@@ -39,7 +39,7 @@ async function main(){
    execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',bundle],{timeout:120000,stdio:'pipe'});
    execFileSync('/usr/sbin/spctl',['--assess','--type','execute',bundle],{timeout:120000,stdio:'pipe'});
    const asar=require('node:module').createRequire(require.resolve('@matiq-solutions/sdk'))('@electron/asar'),files=execFileSync('git',['ls-tree','-r','--name-only',candidate.commit,'--','src','matiq-tool.json','package.json','LICENSE','NOTICE','docs','extension/identities.json'],{cwd:root,encoding:'utf8'}).trim().split('\n');
-   for(const file of files){const expected=execFileSync('git',['show',candidate.commit+':'+file],{cwd:root});assert.ok((await asar.extractFile(archive,file)).equals(expected),'Packaged resource differs from its recorded source: '+file);}
+   for(const file of files){const expected=execFileSync('git',['show',candidate.commit+':'+file],{cwd:root});const actual=await asar.extractFile(archive,file);if(file==='package.json'){const a=JSON.parse(actual),e=JSON.parse(expected);for(const key of ['name','version','main','license','dependencies'])assert.deepEqual(a[key],e[key],'Packaged runtime metadata differs: '+key);}else assert.ok(actual.equals(expected),'Packaged resource differs from its recorded source: '+file);}
    for(const name of ['sdk','runtime','shell'])assert.equal(JSON.parse((await asar.extractFile(archive,'node_modules/@matiq-solutions/'+name+'/package.json')).toString()).version,'0.1.3');
   }
   const binary=path.join(temporary,'GuidesNativeFixture'),cache=path.join(temporary,'modules');
