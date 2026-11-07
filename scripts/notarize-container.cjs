@@ -18,6 +18,7 @@ module.exports=async function notarizeContainer(){
  if(metadata.version!==version||entries?.length!==1)throw Error('The generated update metadata does not identify exactly this candidate disk image.');
  entries[0].sha512=sha512;entries[0].size=bytes.length;
  if(metadata.path===name){metadata.sha512=sha512;if(metadata.size!==undefined)metadata.size=bytes.length;}
+ Object.assign(metadata,{toolId:'com.matiq.guides',sdkVersion:'0.1.3',runtime:'electron-45.2.3',dataVersion:1});
  await fs.writeFile(metadataFile,yaml.dump(metadata));
  await fs.writeFile(path.join(folder,'container-notary.json'),JSON.stringify({schema:1,version,submissionId:ticket.id,status:ticket.status,file:name,sha512,bytes:bytes.length},null,2)+'\n');
  console.log('PASS: signed disk image notarized/stapled; final blockmap and update hashes regenerated.');

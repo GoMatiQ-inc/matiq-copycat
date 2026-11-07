@@ -9,11 +9,12 @@ const {documentation,markdown,exportRequest,warningSteps}=require('./export.cjs'
 exports.activate = async host => {
   const library=path.join(host.dataDir,'guides');await fs.mkdir(library,{recursive:true,mode:0o700});
   let current=null,file=null,release=null,exportUnlock=null,exportFailure='',dirty=false,working=false,saveState='saved',failure='',disposed=false,disposing=false;
+  const updates=require('./standalone-updates.cjs').create(host);
   const windows=new Set();let bridge=null,browserOwner=null,finishPending=false,stateRevision=0,pendingInterruption=null,quiesce=null;
   let desktopChoices=[],desktop=null,desktopQueue=Promise.resolve(),desktopAccepting=false,desktopCutoff=0,desktopInterrupting=null,desktopPending=0,desktopPendingBytes=0;
   const desktopLimits={steps:4,bytes:3*1024*1024};
   const activeCapture=()=>current?.capture&&['recording','paused'].includes(current.capture.phase);
-  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure||exportFailure,exportCleanup:!!exportUnlock&&!!exportFailure,desktop:{active:!!desktop,accepting:desktopAccepting,pending:desktopPending,bytes:desktopPendingBytes,limits:desktopLimits},bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
+  const snapshot=()=>({revision:stateRevision,project:current,file:file?path.basename(file):null,saveState,unsaved:dirty,error:failure||exportFailure,exportCleanup:!!exportUnlock&&!!exportFailure,updates:updates.snapshot(),desktop:{active:!!desktop,accepting:desktopAccepting,pending:desktopPending,bytes:desktopPendingBytes,limits:desktopLimits},bridge:bridge?{receiver:bridge.receiver,instance:app.getName(),connected:!!browserOwner,finishPending}:null});
   const notify=()=>{host.emit('com.matiq.guides:state',snapshot());bridge?.broadcast({type:'status',status:browserStatus()});};
   function browserStatus(){return {revision:stateRevision,receiver:bridge?.receiver,instance:app.getName(),guide:current?{id:current.guide.id,title:current.guide.title}:null,capture:current?.capture?.source==='desktop'?null:current?.capture||null,finishPending};}
   async function cleanupExport(){if(!exportUnlock)return;try{await exportUnlock();exportUnlock=null;exportFailure='';}catch(error){exportFailure='Export destination cleanup failed ('+(error.code||'ownership changed')+'). Reconnect its storage or resolve its ownership record, then choose Retry export cleanup. Your local guide remains saved.';throw Error(exportFailure);}}
@@ -125,6 +126,7 @@ exports.activate = async host => {
   host.handle('com.matiq.guides:request',async(name,args)=>{
     if(disposed||disposing)throw Error('Reopen Guides before continuing.');
     if(name==='state')return snapshot();
+    if(name.startsWith('update-')){if(args!==undefined)throw Error('Update actions do not accept paths or configuration.');if(name==='update-restart'){const status=await toolStatus();if(status.busy)throw Error(status.reason);}return updates.command(name.slice(7));}
     if(exportUnlock&&!['export-cleanup','export'].includes(name))throw Error('Retry export cleanup before continuing.');
     if(name==='dirty'){if(activeCapture())throw Error('Stop capture before editing steps.');dirty=true;saveState='unsaved';return;}
     if(working)throw Error('Wait for the current operation to finish.');working=true;
@@ -214,8 +216,9 @@ exports.activate = async host => {
     }finally{await endWork();}
   });
   await host.view.webContents.loadFile(path.join(host.resourceDir,'src/index.html'));
+  async function toolStatus(){if(disposed)return {busy:false};const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');return {busy:updates.busy()||working||dirty||rendererDirty||!!activeCapture()||!!exportUnlock||saveState==='failed',reason:updates.busy()?updates.reason():activeCapture()?'Stop or cancel the current capture before closing or restarting.':saveState==='failed'?'Retry the failed save before closing.':working?'Finish the current Guides save, dialog or export.':exportUnlock?'Retry export destination cleanup before closing or restarting.':dirty||rendererDirty?'Save the current guide before closing or restarting.':'',background:!!activeCapture()};}
   return {
-    async status(){if(disposed)return {busy:false};const rendererDirty=await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)');return {busy:working||dirty||rendererDirty||!!activeCapture()||!!exportUnlock||saveState==='failed',reason:activeCapture()?'Stop or cancel the current capture before closing or restarting.':saveState==='failed'?'Retry the failed save before closing.':working?'Finish the current Guides save, dialog or export.':exportUnlock?'Retry export destination cleanup before closing or restarting.':dirty||rendererDirty?'Save the current guide before closing or restarting.':'',background:!!activeCapture()};},
+    status:toolStatus,
     async dispose(){
       if(disposed)return;
       if(working)throw Error('Wait for the current save or native dialog to finish, then retry closing Guides.');
@@ -228,7 +231,7 @@ exports.activate = async host => {
         if((dirty||rendererDirty)&&current){const draft=P.validate(await host.view.webContents.executeJavaScript('window.guidesDraftSnapshot()'));if(draft.guide.id!==current.guide.id)throw Error('The pending edit identity changed. Keep Guides open and save a recovered project before retrying closure.');await P.atomicWrite(file+'.draft',draft);}
         if(current?.capture?.phase==='recording')await captureWrite(C.transition(current,'pause',(pendingInterruption?pendingInterruption+' ':'')+'Guides closed during capture. Reconnect explicitly and review pending steps before continuing.'));
         if(bridge){await bridge.dispose();bridge=null;browserOwner=null;}
-        await host.view.webContents.executeJavaScript('window.guidesDispose()');for(const win of windows){win.destroy();windows.delete(win);}await closeProject();disposed=true;
+        await host.view.webContents.executeJavaScript('window.guidesDispose()');for(const win of windows){win.destroy();windows.delete(win);}await updates.dispose();await closeProject();disposed=true;
       }finally{disposing=false;}
     }
   };

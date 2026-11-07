@@ -29,7 +29,7 @@ async function main(){
  run('/usr/bin/codesign',['--verify','--strict',path.join(output,dmg)]);
  run('/usr/bin/xcrun',['stapler','validate','-q',path.join(output,dmg)]);
  run('/usr/sbin/spctl',['--assess','--type','open','--context','context:primary-signature','--verbose=2',path.join(output,dmg)]);
- const metadata=yaml.load(await fs.readFile(path.join(output,'latest-mac.yml'),'utf8'));assert.equal(metadata.version,version);
+ const metadata=yaml.load(await fs.readFile(path.join(output,'latest-mac.yml'),'utf8'));assert.equal(metadata.version,version);require('../src/standalone-updates.cjs').releaseSummary(metadata);
  for(const name of [zip,dmg]){const matches=metadata.files.filter(entry=>entry.url===name);assert.equal(matches.length,1);const bytes=await fs.readFile(path.join(output,name));assert.equal(matches[0].sha512,crypto.createHash('sha512').update(bytes).digest('base64'));assert.equal(matches[0].size,bytes.length);}
  const artifacts={};
  for(const name of [zip,dmg]){const bytes=await fs.readFile(path.join(output,name));artifacts[name]={bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex')};}
