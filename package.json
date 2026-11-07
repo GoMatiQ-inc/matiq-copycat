@@ -1,0 +1,41 @@
+{
+  "name": "com.matiq.guides",
+  "productName": "MatiQ Guides",
+  "version": "0.1.0",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --publish never",
+    "tool:validate": "matiq-tool validate",
+    "tool:pack": "matiq-tool pack --output tool.mqt",
+    "tool:pack-app": "matiq-tool pack-app"
+  },
+  "dependencies": {
+    "@matiq-solutions/runtime": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-runtime-0.1.3.tgz",
+    "@matiq-solutions/shell": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-shell-0.1.3.tgz"
+  },
+  "devDependencies": {
+    "@matiq-solutions/sdk": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-sdk-0.1.3.tgz",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.matiq.guides",
+    "productName": "MatiQ Guides",
+    "icon": "node_modules/@matiq-solutions/shell/assets/app-icon.png",
+    "mac": {
+      "icon": "node_modules/@matiq-solutions/shell/assets/app-icon.icns"
+    },
+    "files": [
+      "src/**/*",
+      "matiq-tool.json",
+      "package.json",
+      "LICENSE"
+    ]
+  }
+}
