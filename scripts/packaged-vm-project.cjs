@@ -10,7 +10,7 @@ async function main(){
  const candidate=JSON.parse(await fs.readFile(files[manifest.signature],'utf8'));assert.equal(candidate.version,manifest.toolVersion);assert.equal(candidate.commit,manifest.toolSource);assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');assert.equal(manifest.files[manifest.toolZip].sha256,candidate.artifacts[manifest.toolZip].sha256);execFileSync('git',['cat-file','-e',manifest.toolSource+'^{commit}'],{stdio:'pipe',timeout:10000});
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-packaged-vm-')));let passed=false;
  try{
-  async function unpack(role,bundle){const archive=files[manifest[role]],target=path.join(temporary,role);await fs.mkdir(target);execFileSync('/usr/bin/python3',['-c',`import pathlib,zipfile,stat,posixpath,sys
+  async function unpack(role,bundle){console.log('Extracting signed qualification bundle:',bundle);const archive=files[manifest[role]],target=path.join(temporary,role);await fs.mkdir(target);execFileSync('/usr/bin/python3',['-c',`import pathlib,zipfile,stat,posixpath,sys
 with zipfile.ZipFile(sys.argv[1]) as archive:
  total=0
  for member in archive.infolist():
@@ -21,7 +21,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
   if stat.S_ISLNK(member.external_attr>>16):
    link=archive.read(member).decode('utf-8');resolved=posixpath.normpath(posixpath.join(posixpath.dirname(name),link))
    assert not link.startswith('/') and resolved.split('/')[0]==sys.argv[2]
-`,archive,bundle],{stdio:'pipe',timeout:30000});execFileSync('/usr/bin/ditto',['-x','-k',archive,target],{stdio:'pipe',timeout:120000});const app=path.join(target,bundle);execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',app],{stdio:'pipe',timeout:120000});execFileSync('/usr/sbin/spctl',['--assess','--type','execute',app],{stdio:'pipe',timeout:120000});return app;}
+`,archive,bundle],{stdio:'pipe',timeout:30000});execFileSync('/usr/bin/ditto',['-x','-k',archive,target],{stdio:'pipe',timeout:120000});const app=path.join(target,bundle);console.log('Verifying strict signature and Gatekeeper:',bundle);execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',app],{stdio:'pipe',timeout:role==='chromeZip'?300000:120000});execFileSync('/usr/sbin/spctl',['--assess','--type','execute',app],{stdio:'pipe',timeout:120000});console.log('Verified signed qualification bundle:',bundle);return app;}
   const standalone=await unpack('toolZip','MatiQ Guides.app'),suite=await unpack('suiteZip','MatiQ Solutions.app'),chrome=await unpack('chromeZip','Google Chrome.app');
   for(const [bundle,version]of [[standalone,manifest.toolVersion],[suite,manifest.suiteVersion],[chrome,manifest.chromeVersion]])assert.equal(execFileSync('/usr/libexec/PlistBuddy',['-c','Print :CFBundleShortVersionString',path.join(bundle,'Contents/Info.plist')],{encoding:'utf8',timeout:10000}).trim(),version);
   assert.equal(await hash(path.join(suite,'Contents/Resources/app.asar')),manifest.suiteArchiveSHA256,'The suite bytes must match the previously verified release.');
