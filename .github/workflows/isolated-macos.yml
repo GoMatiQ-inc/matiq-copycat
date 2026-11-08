@@ -24,6 +24,8 @@ jobs:
     env:
       GUIDES_NATIVE_TEST_VM: tart
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      GUIDES_RUN_PACKAGED_QUALIFICATION: ${{ vars.GUIDES_RUN_PACKAGED_QUALIFICATION }}
+      GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -32,22 +34,26 @@ jobs:
           fetch-depth: 0
       - name: Verify VM isolation before installing or opening anything
         run: node -e "require('./scripts/native-test-isolation.cjs').assertNativeTestIsolation()"
-      - name: Qualified SDK desktop regression in the guest
+      - name: Fast feature regression in the guest
         shell: bash
         run: |
           /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
           npm ci --no-audit --no-fund
           npm test
-          node scripts/electron-vm-preflight.cjs
-          npm run test:desktop
+          if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && -z "$GUIDES_BROWSER_DIAGNOSTIC" ]]; then
+            node scripts/electron-vm-preflight.cjs
+            npm run test:desktop
+            export GUIDES_DESKTOP_REGRESSION=1
+          fi
           npm run tool:validate
           node <<'NODE'
           const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
-          const proof={passed:true,scope:'SDK development desktop regression inside the authorized Tart guest; not packaged capture or complete acceptance',sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),node:process.version,arch:process.arch,macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,electron:require('electron/package.json').version,cleanup:'Desktop fixture independently verified owned process/listener absence.'};
+          const proof={passed:true,scope:process.env.GUIDES_DESKTOP_REGRESSION==='1'?'SDK development desktop regression; packaged capture qualification is separate':'Fast feature regression: core tests and SDK manifest validation only; no packaged or desktop acceptance claim',desktopRegression:process.env.GUIDES_DESKTOP_REGRESSION==='1',sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),node:process.version,arch:process.arch,macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,electron:require('electron/package.json').version,cleanup:process.env.GUIDES_DESKTOP_REGRESSION==='1'?'Desktop fixture independently verified owned process/listener absence.':'No desktop fixture launched by the fast regression step.'};
           fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'matiq-guides-isolated-sdk-proof.json'),JSON.stringify(proof,null,2)+'\n');
           NODE
           SCRIPT
-      - name: Signed projects and six real browser/form journeys in the guest
+      - name: Signed packaged qualification in the guest
+        if: env.GUIDES_RUN_PACKAGED_QUALIFICATION == 'true'
         env:
           GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
           GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}

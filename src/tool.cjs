@@ -21,7 +21,12 @@ exports.activate = async host => {
   async function captureWrite(next){saveState='saving';notify();try{await P.atomicWrite(file,next);current=next;stateRevision++;saveState='saved';dirty=false;failure='';notify();}catch(error){saveState='failed';failure='Capture was not saved. Reconnect and retry the pending step: '+error.message;notify();throw Error(failure);}}
   async function captureControl(command,reason=''){if(command==='stop'||command==='cancel')finishPending=false;if(!current)throw Error('Create or open a guide first.');await captureWrite(command==='start'?C.begin(current):C.transition(current,command,reason));return snapshot();}
   async function endWork(){working=false;const reason=pendingInterruption;pendingInterruption=null;if(reason&&activeCapture()){working=true;try{await captureWrite(current.capture.phase==='recording'?C.transition(current,'pause',reason):C.warn(current,reason));}finally{working=false;}}}
-  async function quiesceBrowser(){if(!browserOwner||browserOwner.socket.destroyed||!activeCapture()||current.capture.source==='desktop')return;let timer;try{await new Promise((resolve,reject)=>{quiesce={id:randomUUID(),resolve};timer=setTimeout(()=>reject(Error('The browser did not confirm that capture stopped. Close its extension or browser, then retry closing Guides.')),5000);bridge.broadcast({type:'pause-request',control:quiesce.id,reason:'Guides is closing. Browser capture stopped; reopen and explicitly resume when ready.'});});}finally{clearTimeout(timer);quiesce=null;}}
+  async function quiesceBrowser(reason='Guides is closing. Browser capture stopped; reopen and explicitly resume when ready.'){
+    if(quiesce)return quiesce.promise;
+    if(!browserOwner||browserOwner.socket.destroyed||!activeCapture()||current.capture.source==='desktop')return;
+    let timer;const confirmation=new Promise((resolve,reject)=>{quiesce={id:randomUUID(),resolve};timer=setTimeout(()=>reject(Error('The browser did not confirm that capture stopped. Reconnect it and retry the capture control or closing Guides.')),5000);bridge.broadcast({type:'pause-request',control:quiesce.id,reason});});quiesce.promise=confirmation;
+    try{await confirmation;}finally{clearTimeout(timer);quiesce=null;}
+  }
   async function enableBridge(){
     if(bridge)return;
     bridge=await B.start({directory:path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge'),instance:app.getName(),origins:[`chrome-extension://${identities.chromiumId}/`,identities.firefoxId],report:error=>{failure='Browser bridge cleanup needs attention: '+error.message;notify();},
@@ -130,6 +135,13 @@ exports.activate = async host => {
     if(exportUnlock&&!['export-cleanup','export'].includes(name))throw Error('Retry export cleanup before continuing.');
     if(name==='dirty'){if(activeCapture())throw Error('Stop capture before editing steps.');dirty=true;saveState='unsaved';return;}
     if(name==='capture-control'&&args==='stop'&&activeCapture()&&current.capture.source!=='desktop'&&browserOwner&&!browserOwner.socket.destroyed){if(!finishPending){finishPending=true;bridge.broadcast({type:'finish-request'});notify();}return snapshot();}
+    if(name==='capture-control'&&['pause','cancel'].includes(args)&&activeCapture()&&current.capture.source!=='desktop'&&browserOwner&&!browserOwner.socket.destroyed){
+      await quiesceBrowser(args==='pause'?'Capture paused from Guides. Explicitly resume from the selected browser tab when ready.':'Capture cancellation requested from Guides. Recording stopped while pending delivery settles.');
+      if(disposing||disposed)throw Error('Guides is closing. Capture has stopped; reopen it before continuing.');
+      if(args==='pause'&&current.capture.phase==='paused')return snapshot();
+      if(working)throw Error('Capture stopped. Wait for the current save to finish, then retry the control.');working=true;
+      try{await captureControl(args);return snapshot();}finally{await endWork();}
+    }
     if(working)throw Error('Wait for the current operation to finish.');working=true;
     try {
       if(name==='export-cleanup'){await cleanupExport();return snapshot();}
