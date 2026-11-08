@@ -2,7 +2,7 @@
 
 A local-first workflow-documentation tool for MatiQ Solutions. Capture a browser or selected desktop workflow, then review and edit its illustrated steps and save or export the guide.
 
-**Release qualification is in progress.** The renamed desktop candidate is 0.1.16; companion developer extensions are 0.1.13. Signed/store browser distribution, marketplace installation and released-update acceptance are separate gates. No Windows, Linux or Safari support is advertised.
+**[Desktop0.1.16 is released](https://github.com/GoMatiQ-inc/matiq-copycat/releases/tag/v0.1.16)** with signed/notarized macOS arm64 standalone, signed suite package and companion developer extensions0.1.13. Actual packaged core workflows pass in both forms, as do explicit marketplace installation, published0.1.15 → 0.1.16 updates and active native-capture interruption/recovery. Attached qualification receipts record exact versions and limits. Full acceptance remains incomplete: signed persistent Firefox/store distribution needs publisher access, and the listed permission, restart, display and ownership cases remain unqualified. No Windows, Linux, Intel macOS or Safari support is advertised.
 
 Copycat uses the qualified MatiQ Solutions **SDK/runtime/shell 0.1.3** and Electron **45.2.3**. One implementation produces the standalone macOS application and signed suite package. Shared shell and brand assets come from the SDK.
 
