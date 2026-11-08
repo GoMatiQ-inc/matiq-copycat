@@ -97,3 +97,12 @@ The [first-use receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/do
 The actual Screen Recording Deny dialog produces an actionable error with no steps, assets or recorder. After a native Settings grant, the actual Accessibility Deny dialog produces an actionable error and paused capture, again with no steps, assets or recorder. Native grants do not automatically resume recording. Explicit Start captures the first real selected-window screenshot and control label; the same guide remains editable and saves. App, target, Settings and owned listener cleanup are independently verified.
 
 The standalone is freshly installed from the exact released signed/notarized ZIP in an isolated Applications location. The suite starts with no installed tools, refreshes the actual signed marketplace, verifies listing/cancel do not install, then explicitly downloads and installs the released signed 0.1.18 package before the permission workflow. Declared capabilities and installation do not grant OS permissions.
+
+
+## Actual 1x and 2x display scaling on 0.1.18
+
+The [display-scale receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.18/display-scale-qualification-0.1.18.json) qualifies unchanged released source aaf4b17 in both signed packaged forms. Harness 9041275 runs on macOS 15.7.7 arm64 in Tart, SDK/runtime/shell 0.1.3, Electron 45.2.3 and suite 0.1.1.
+
+The actual display changes from 2048×1536 pixels to 1024×768 pixels while keeping 1024×768 logical points, then restores its exact original mode. Each transition visibly pauses capture and stops the recorder before explicit resume. A paused click adds nothing. Actual screenshots at both densities pass the independent painted-control highlight oracle; prior steps and assets remain unchanged. Normal shutdown independently verifies owned process/listener absence. A separate CoreGraphics process verifies the original 2x mode after both jobs.
+
+Reproduce in the isolated Tart guest under its storage guard using the existing packaged executable, candidate-proof and suite-package variables: set GUIDES_NATIVE_TEST_VM=tart, GUIDES_TEST_WINDOW_RESIZE=1, GUIDES_TEST_DISPLAY_SCALE=1 and a reusable GUIDES_SWIFT_MODULE_CACHE, then run node scripts/window-resize-test.cjs once per form. The fixture uses app-scoped OS display configuration and automatically restores it. Application capture approvals are controlled; display modes, capture pixels and persistence are real. This does not qualify multiple displays, attachment/removal or sleep/lock.
