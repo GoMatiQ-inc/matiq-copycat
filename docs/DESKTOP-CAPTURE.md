@@ -34,6 +34,16 @@ Released **0.1.16/sourcebe5f88d** passes in BOTH forms with unchanged suite **0.
 
 Reproduce under the native storage guard with `GUIDES_NATIVE_TEST_VM=tart`, `GUIDES_TEST_DISPLAY_CHANGE=1`, the existing packaged executable/package/proof variables and `npm run test:native-app`, once per form. Application approval choices are controlled; display configuration, capture, helper exit and persistence are real. The fixture's configuration is application-scoped and automatically reverts at process termination. This qualifies a resolution change on the existing VM display; hotplug, multiple displays, sleep/lock, effective permission revocation and motion during a pending screenshot remain unqualified.
 
+## 0.1.18 pending-screenshot resize correction
+
+Released0.1.16 can retain a target measured before a window resize while the screenshot reflects the resized window. A calibrated painted-button check reproduced a highlight outside its actual target. Keep native windows steady when using0.1.16.
+
+Build0.1.18/source **aaf4b17e601c9cccc64b03b445f68dd6b39bdcc0** observes Accessibility move/resize notifications only while a screenshot request is pending and rechecks window geometry before emitting a step. A change stops the helper and visibly pauses capture with a review warning. If the window cannot be monitored reliably, its step omits the automatic highlight and retains a manual-review warning; instructions and screenshots remain editable. No raw typing or additional content is observed.
+
+Both signed forms pass three actual resize attempts each on macOS15.7.7arm64, SDK/runtime/shell0.1.3, Electron45.2.3 and unchanged suite0.1.1. Every attempt pauses before retaining an inaccurate step; the helper exits before explicit resume, and resumed screenshot pixels agree with the target. Stable baseline and resumed target centers differ from the painted button by less than0.003 of image height. Normal cleanup independently confirms owned processes/listeners are absent. Real selected-window movement between actions, display resolution interruption, active-capture SIGKILL recovery and edit/redact/save/reopen also pass in both forms.
+
+Run \`node scripts/window-resize-test.cjs\` in isolated Tart with \`GUIDES_NATIVE_TEST_VM=tart\`, \`GUIDES_TEST_WINDOW_RESIZE=1\` and the normal signed executable/package/proof variables under the storage guard, once per form. The painted button and repeated actual OS window resizes are controlled fixtures; capture and transport are real. The optional \`GUIDES_CAPTURE_COMPONENT=1\` development check is explicitly not packaged qualification. Effective OS permission revocation, sleep/lock, hotplug/multiple displays and arbitrary native applications remain outside this evidence. Project/dataVersion1 and extension/protocol compatibility are unchanged.
+
 ## Reproduction and current evidence limits
 
 On the authorized Mac, reserve storage and run:
