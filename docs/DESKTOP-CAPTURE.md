@@ -1,6 +1,6 @@
 # Selected-window desktop capture
 
-Unpublished development implementation with controlled signed standalone/suite baselines; full release acceptance remains incomplete. The intended first target is Apple Silicon macOS. A macOS 14.2 linking target does not qualify untested OS versions.
+Released desktop0.1.16 passes selected-window and mixed-source workflows in BOTH signed standalone and suite forms on macOS15.7.7arm64, SDK/runtime/shell0.1.3 and Electron45.2.3. Full acceptance remains incomplete for the specific limits below. A macOS14.2 linking target does not qualify untested OS versions.
 
 ## Scope and setup
 
@@ -16,11 +16,17 @@ A short-lived native helper uses ScreenCaptureKit window screenshots and Accessi
 
 Recording status is visible in Copycat. Pause, stop and cancel close and await the owned helper; resume explicitly selects a window again. The private pipe closes when its parent disappears, stopping the helper. In-flight screenshots that cannot finish before a stop create a review warning. Step delivery already emitted before a stop is drained before the guide transition.
 
-Window movement recalculates screenshot scale and target coordinates per action. A display configuration change, sleep/lock, application/window closure, permission revocation, capture failure or capture overload stops the helper and visibly pauses capture. Actions faster than the single pending screenshot can be handled produce a warning instead of silently dropped steps. Retained screenshots use the same canonical guide assets, atomic persistence, annotations, redaction and exports as browser/manual steps.
+Window movement recalculates screenshot scale and target coordinates per action. The helper is designed to stop and visibly pause capture on a display configuration change, sleep/lock, application/window closure, permission revocation, capture failure or overload. Actual application closure and overload are qualified; live OS revocation, display changes and sleep/lock still need real execution evidence. Actions faster than the single pending screenshot can be handled produce a warning instead of silently dropped steps. Retained screenshots use the same canonical guide assets, atomic persistence, annotations, redaction and exports as browser/manual steps.
 
 Native pending delivery is limited to four steps or 3 MiB. Storage pressure stops the mouse observer, drains already accepted steps, and saves a warning that additional actions may be missing. The status shows pending delivery and the limit; explicitly resume after reviewing saved steps.
 
 Cleanup failures remain actionable and can be retried. No native capture listener is installed at application launch, while paused, or after the helper exits. The SDK owns application shutdown; a close acknowledgement is not used as proof that the process exited.
+
+## Released selected-window movement qualification
+
+With `GUIDES_NATIVE_TEST_VM=tart`, `GUIDES_TEST_WINDOW_MOVE=1` and the actual packaged executable/package/proof variables, run `npm run test:native-app` under the native storage guard once per form. The selected fixture window changes screen position while recording is active; the next click on the same button must create the next illustrated step with a matching screenshot-relative highlight. The test retains a rendered preview privately and restores the first selection before the existing edit/save/reopen checks.
+
+Released0.1.16 passes in BOTH forms at harness3586c4b on macOS15.7.7arm64. The actual control moved from screen position270,288 to390,228; target coordinates remain identical and both rendered highlights were visually inspected around the actual button. Normal stop, save/reopen, cancel, selected-application closure and independent owned-process cleanup also pass. [Exact movement receipts](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.16/native-window-movement-qualification-0.1.16.json) contain versions and limits; fixture screenshots stay private. This qualifies movement between actions, not moving during an in-flight screenshot, display changes, sleep/lock, live OS permission revocation or fresh final-version OS-profile setup. Application approval choices are controlled; OS capture and packaged execution are real.
 
 ## Reproduction and current evidence limits
 
