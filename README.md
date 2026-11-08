@@ -1,31 +1,19 @@
-# MatiQ Guides
+# MatiQ Copycat
 
-Local illustrated workflow documentation, using the MatiQ Solutions desktop SDK **0.1.3** and its qualified Electron **45.2.3** runtime. One adapter runs in standalone and suite forms. Source-available under the no-sale license in LICENSE; third-party components retain their notices.
+A local-first workflow-documentation tool for MatiQ Solutions. Capture a browser or selected desktop workflow, then review and edit its illustrated steps and save or export the guide.
 
-## Delivery state
+**Release qualification is in progress.** The renamed desktop candidate is 0.1.12; companion developer extensions are 0.1.11. Signed/store browser distribution, marketplace installation and released-update acceptance are separate gates. No Windows, Linux or Safari support is advertised.
 
-Unpublished signed/notarized macOS arm64 candidate **0.1.7**, source **9418ca7**, using qualified SDK/runtime/shell **0.1.3** and Electron **45.2.3**. Thirty-nine core checks pass. Current actual packaged standalone/suite evidence covers cross-form editing, annotations/redaction, stable identities/assets, independent HTML/Markdown/PDF, revision-bound sharing review, destination ownership and cleanup retry.
+Copycat uses the qualified MatiQ Solutions **SDK/runtime/shell 0.1.3** and Electron **45.2.3**. One implementation produces the standalone macOS application and signed suite package. Shared shell and brand assets come from the SDK.
 
-Actual signed **0.1.6 → 0.1.7** native application update passes checksum rejection, busy quit and unsaved-restart refusal, native signature staging, real installer replacement/relaunch and preserved editable mixed-guide content/assets. Native helpers, registration, staging and listeners are independently cleaned. The real signed suite candidate **0.1.6 → 0.1.7** update also passes staging/restart and retained work in unchanged suite **0.1.1**. These use controlled local candidate feeds/SDK installation, not a published marketplace or release endpoint. See docs/UPDATES.md.
+Core capture, editing, project storage and HTML/Markdown/PDF export run locally without an account, subscription or model. Screenshots may contain secrets. Review and redact before sharing; editable projects retain originals, while the sanitized portable export excludes them. Read [project format and sharing safety](docs/PROJECT-FORMAT.md) and [extension setup](docs/EXTENSIONS.md).
 
-With developer extension **0.1.4**, all six real Chrome, Edge and Firefox capture journeys pass against both signed 0.1.7 forms. Chrome includes actual TextEdit mixed capture. The successor also quarantines rejected authentication/protocol connections before later queued actions reach the guide owner. Earlier native pressure and ownership-handoff evidence is retained with its original versions.
+The product was previously developed under the working name MatiQ Guides. Compatibility identifiers, version-1 `.mqguide` projects and the existing standalone data directory remain stable; the SDK's documented profile option preserves that directory. The suite uses its own tool data directory. Move projects between forms through editable export/import.
 
-Full acceptance remains incomplete: fresh OS permissions, broader browser/native/recovery/offline and writer cases, marketplace installation, independently published updates, shared bridge lifecycle and signed extension distribution remain open. No public availability is claimed.
+## Development and release
 
-## Develop
+Use Node 22.12 or newer. Install locked dependencies with `npm ci`; run core checks with `npm test` and `npm run tool:validate`. `npm run build:extensions` produces reproducible Chrome, Edge and unsigned Firefox developer ZIPs. These checks do not qualify packaged execution or public store distribution.
 
-Node >=22.12. `npm ci`, `npm test`, `npm start`. See docs/EXTENSIONS.md for browser development, scope, bridge setup and evidence limits; docs/DESKTOP-CAPTURE.md covers selected-window capture and its qualification limits. Follow applicable storage/lifecycle controls before installs, tests, desktop sessions or builds. Dependency URLs pin the immutable sdk-v0.1.3 SDK/runtime/shell archives. Do not substitute platform-feature SDKs or upgrade Electron independently.
+Use the existing protected macOS signing/notarization infrastructure for `npm run release:candidate`, `npm run verify:release` and `npm run tool:package`. Keep credentials out of source and arguments. See [release instructions](docs/RELEASE.md). Actual packaged GUI qualification runs in an isolated Tart guest, using controlled fixtures and independent owned-process/listener cleanup.
 
-The adapter loads src/index.html in host.view.webContents, prefixes renderer commands with com.matiq.guides, uses host.window only as a native-dialog parent and stores the library under host.dataDir/guides. Native permissions are separate from manifest capabilities. The SDK runtime supplies sandboxing, trusted-frame checks, shell styling and compatible tool ownership leases.
-
-## Projects and sharing
-
-See docs/PROJECT-FORMAT.md. Save locally before switching or exporting. A portable `.mqguide` contains the editable guide and embedded screenshot assets. Import preserves stable identities and rejects an existing guide ID rather than overwriting work; duplicate explicitly for a distinct copy.
-
-Editable projects retain originals. HTML, Markdown/images and PDF burn crop/annotations/redactions into pixels and preserve reviewed instructions and notes. If a guide has redactions or capture warnings, review its saved sharing text before export; every edit or new save invalidates that review. Sanitized sharing projects retain reviewed instructions but discard original step notes, original screenshots, source/capture context and interaction timestamps. Capture warnings become explicit manual review-note steps. Always manually inspect text and visible pixels before sharing. No masking guarantee is made.
-
-## Release contract
-
-Build/sign/notarize the standalone through the existing native release infrastructure and SDK credential helpers. Then use `matiq-tool pack-app --resources ... --extra native --target darwin-arm64 --output ... --url ...` against those same resources to produce the signed `.mqt` and matching `.release.json`. Signing keys belong only in the protected release environment. General availability requires the full standalone/suite, capture, export, marketplace and update acceptance evidence. Candidate publication and catalog metadata must follow the existing reviewed release process.
-
-The current manifest limits the first intended target to darwin-arm64; it is not a qualification claim. No other platform is advertised. See docs/PROVENANCE.md for reference boundaries.
+[Provenance](docs/PROVENANCE.md) records functional references consulted read-only. The implementation is independent; no Mimik code or assets are included. MatiQ's source-available, no-sale license is preserved in [LICENSE](LICENSE), with third-party notices in [NOTICE](NOTICE).

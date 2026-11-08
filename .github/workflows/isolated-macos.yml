@@ -1,5 +1,7 @@
-name: Guides core checks and isolated macOS qualification
+name: Copycat core checks and isolated macOS qualification
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'src/**'
