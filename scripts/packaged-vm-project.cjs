@@ -32,6 +32,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
   let result={inputManifestSHA256:await hash(input),suiteArchiveSHA256:manifest.suiteArchiveSHA256,isolation:'authorized Tart guest; physical-host GUI commands are blocked'};
   if(!diagnostic){
   execFileSync(process.execPath,[path.join(__dirname,'packaged-project-test.cjs')],{env,stdio:'inherit',timeout:420000});const proof=JSON.parse(await fs.readFile(path.join(__dirname,'../.validation/packaged-project-proof.json'),'utf8'));assert.equal(proof.result,'passed');assert.equal(proof.sourceCommit,manifest.toolSource);assert.equal(proof.tool,manifest.toolVersion);assert.equal(proof.cleanup,'owned processes and listeners verified absent');
+  execFileSync(process.execPath,[path.join(__dirname,'packaged-recovery-test.cjs')],{env,stdio:'inherit',timeout:300000});
   result={...proof,...result,chromeVersion:manifest.chromeVersion};await fs.writeFile(path.join(process.env.RUNNER_TEMP||temporary,'matiq-guides-packaged-vm-proof.json'),JSON.stringify(result,null,2)+'\n');
   }
   if(browserMatrix){
