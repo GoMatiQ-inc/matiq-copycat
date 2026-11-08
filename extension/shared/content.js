@@ -10,7 +10,7 @@
  function role(element){if(element.tagName==='INPUT'&&['button','submit','reset'].includes(element.type))return 'button';if(element.tagName==='A')return 'link';if(element.tagName==='SELECT')return 'dropdown';if(element.type==='checkbox')return 'checkbox';if(element.type==='radio')return 'radio button';if(element.tagName==='INPUT'||element.tagName==='TEXTAREA'||element.isContentEditable)return 'field';return element.getAttribute('role')==='menuitem'?'menu item':'button';}
  function label(element){if(['INPUT','TEXTAREA','SELECT'].includes(element.tagName)||element.isContentEditable)return '';return (element.getAttribute('aria-label')||element.innerText||'').trim().slice(0,100);}
  function action(e){
-  if(!active||!e.isTrusted||e.button!==0)return;
+  if(!active||!e.isTrusted||e.button!==0||(e.type==='click'&&e.detail!==0))return;
   const element=e.target?.closest?.('button,a,input,textarea,select,[role="button"],[role="menuitem"],[role="checkbox"],[contenteditable="true"]');
   if(!element||element.disabled||badge?.contains(element))return;
   if(e.detail>1){send({command:'warning',reason:'A repeated click was grouped with its preceding click. Review double-click instructions manually.'}).catch(()=>{});return;}
@@ -29,7 +29,7 @@
  function stop(){active=false;controller?.abort();controller=null;observer?.disconnect();observer=null;clearTimeout(timer);badge?.remove();badge=null;targets.clear();}
  function start(){
   stop();framesWarned=false;document.getElementById('matiq-guides-capture-error')?.remove();active=true;controller=new AbortController();const options={capture:true,signal:controller.signal};
-  addEventListener('pagehide',stop,{signal:controller.signal});addEventListener('mousedown',action,options);addEventListener('change',form,options);addEventListener('scroll',changed,options);addEventListener('resize',changed,options);addEventListener('popstate',changed,options);addEventListener('hashchange',changed,options);visualViewport?.addEventListener('resize',changed,{signal:controller.signal});
+  addEventListener('pagehide',stop,{signal:controller.signal});addEventListener('mousedown',action,options);addEventListener('click',action,options);addEventListener('change',form,options);addEventListener('scroll',changed,options);addEventListener('resize',changed,options);addEventListener('popstate',changed,options);addEventListener('hashchange',changed,options);visualViewport?.addEventListener('resize',changed,{signal:controller.signal});
   badge=document.createElement('div');badge.id='matiq-guides-recording';badge.style.cssText='position:fixed;z-index:2147483647;right:12px;top:12px';
   const shadow=badge.attachShadow({mode:'closed'}),label=document.createElement('span');label.textContent='● MatiQ Guides recording';label.style.cssText='display:block;padding:8px 12px;color:white;background:#8b241b;border-radius:6px;font:13px sans-serif';shadow.append(label);document.documentElement.append(badge);
   observer=new MutationObserver(records=>{if(!badge?.isConnected){send({command:'interrupted',reason:'The page removed the recording indicator. Capture paused; reopen the extension before continuing.'}).catch(()=>{});return;}if(records.some(record=>record.type==='childList'))warnFrames();if(records.some(record=>record.target!==badge))changed();});observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,characterData:true});
