@@ -1,6 +1,6 @@
 # Selected-window desktop capture
 
-Released desktop0.1.16 passes selected-window and mixed-source workflows in BOTH signed standalone and suite forms on macOS15.7.7arm64, SDK/runtime/shell0.1.3 and Electron45.2.3. Full acceptance remains incomplete for the specific limits below. A macOS14.2 linking target does not qualify untested OS versions.
+Desktop0.1.18 passes selected-window and mixed-source workflows in BOTH signed standalone and suite forms on macOS15.7.7arm64, SDK/runtime/shell0.1.3 and Electron45.2.3. Full acceptance remains incomplete for the specific limits below. A macOS14.2 linking target does not qualify untested OS versions.
 
 ## Scope and setup
 
@@ -42,7 +42,7 @@ Build0.1.18/source **aaf4b17e601c9cccc64b03b445f68dd6b39bdcc0** observes Accessi
 
 Both signed forms pass three actual resize attempts each on macOS15.7.7arm64, SDK/runtime/shell0.1.3, Electron45.2.3 and unchanged suite0.1.1. Every attempt pauses before retaining an inaccurate step; the helper exits before explicit resume, and resumed screenshot pixels agree with the target. Stable baseline and resumed target centers differ from the painted button by less than0.003 of image height. Normal cleanup independently confirms owned processes/listeners are absent. Real selected-window movement between actions, display resolution interruption, active-capture SIGKILL recovery and edit/redact/save/reopen also pass in both forms.
 
-Run \`node scripts/window-resize-test.cjs\` in isolated Tart with \`GUIDES_NATIVE_TEST_VM=tart\`, \`GUIDES_TEST_WINDOW_RESIZE=1\` and the normal signed executable/package/proof variables under the storage guard, once per form. The painted button and repeated actual OS window resizes are controlled fixtures; capture and transport are real. The optional \`GUIDES_CAPTURE_COMPONENT=1\` development check is explicitly not packaged qualification. Effective OS permission revocation, sleep/lock, hotplug/multiple displays and arbitrary native applications remain outside this evidence. Project/dataVersion1 and extension/protocol compatibility are unchanged.
+Run `node scripts/window-resize-test.cjs` in isolated Tart with `GUIDES_NATIVE_TEST_VM=tart`, `GUIDES_TEST_WINDOW_RESIZE=1` and the normal signed executable/package/proof variables under the storage guard, once per form. The painted button and repeated actual OS window resizes are controlled fixtures; capture and transport are real. The optional `GUIDES_CAPTURE_COMPONENT=1` development check is explicitly not packaged qualification. Effective OS permission revocation, sleep/lock, hotplug/multiple displays and arbitrary native applications remain outside this evidence. Project/dataVersion1 and extension/protocol compatibility are unchanged.
 
 ## Reproduction and current evidence limits
 
