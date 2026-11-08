@@ -127,18 +127,6 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
                 } else if NSRunningApplication(processIdentifier: self.pid)?.isTerminated != false {
                     self.stop("The selected application closed. Capture stopped; choose a new window.")
                 } else if !self.busy {
-                    let application = AXUIElementCreateApplication(self.pid)
-                    AXUIElementSetMessagingTimeout(application, 0.5)
-                    var role: CFTypeRef?
-                    let access = AXUIElementCopyAttributeValue(application, kAXRoleAttribute as CFString, &role)
-                    if access == .apiDisabled {
-                        self.stop("Accessibility permission was revoked. Capture stopped; restore permission before resuming.")
-                        return
-                    }
-                    if access == .cannotComplete || access == .failure {
-                        self.stop("The selected application's Accessibility context could not be checked. Capture stopped; check permissions and select the window again.")
-                        return
-                    }
                     do {
                         let windows = try await content()
                         if !windows.windows.contains(where: { $0.windowID == self.id }) {
