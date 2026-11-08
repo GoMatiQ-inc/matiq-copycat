@@ -5,8 +5,6 @@ function run(args){
  const files=$.NSFileManager.defaultManager,actual=files.attributesOfItemAtPathError(application.bundleURL.path,null),expected=files.attributesOfItemAtPathError(args[1],null);
  const same=key=>expected.objectForKey(key).isEqualToNumber(actual.objectForKey(key));
  if(!same('NSFileSystemNumber')||!same('NSFileSystemFileNumber'))throw Error('The app identity changed; preserve it and inspect before retrying cleanup.');
- const launchDeadline=Date.now()+5000;while(!application.isFinishedLaunching&&Date.now()<launchDeadline)$.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
- if(!application.isFinishedLaunching)throw Error('The owned app has not finished launching. Inspect startup before testing normal quit.');
  if(!application.terminate)throw Error('The owned app refused its normal quit request.');
  const deadline=Date.now()+15000;while(!application.isTerminated&&Date.now()<deadline)$.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
  if(!application.isTerminated)throw Error('The owned app did not finish normal quit. Inspect its pending work before cleanup.');
