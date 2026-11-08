@@ -47,13 +47,13 @@ function create(host){
  }
  function abort(){cancellation?.cancel();for(const request of requests)request.abort();}
  async function verifyNative(){
-  nativePending=true;state('verifying','Verifying the signed update locally. Keep Guides open; it will be staged for the next safe restart.');
+  nativePending=true;state('verifying','Verifying the signed update locally. Keep Copycat open; it will be staged for the next safe restart.');
   await new Promise((resolve,reject)=>{
    let timer;
    const clear=()=>{clearTimeout(timer);native.removeListener('update-downloaded',ready);native.removeListener('error',failed);};
    const ready=()=>{nativePending=false;clear();resolve();},failed=()=>{nativePending=false;clear();reject(Error('macOS could not verify or stage the update. Keep the current version and retry downloading.'));};
    native.once('update-downloaded',ready);native.once('error',failed);
-   timer=setTimeout(()=>{detail='Update verification is taking longer than expected. Keep Guides open; waiting for macOS to stop safely.';emit();closeProxy().catch(()=>state('cleanup','Update transfer cleanup failed. Keep Guides open and choose Retry update cleanup after macOS verification finishes.'));},120000);
+   timer=setTimeout(()=>{detail='Update verification is taking longer than expected. Keep Copycat open; waiting for macOS to stop safely.';emit();closeProxy().catch(()=>state('cleanup','Update transfer cleanup failed. Keep Copycat open and choose Retry update cleanup after macOS verification finishes.'));},120000);
    try{native.checkForUpdates();}catch{nativePending=false;clear();reject(Error('macOS could not begin update verification. Retry downloading.'));}
   });
  }
@@ -66,9 +66,9 @@ function create(host){
  }
  app.on('will-quit',willQuit);
  async function command(action){
-  if(disposed)throw Error('Reopen Guides before checking for updates.');
+  if(disposed)throw Error('Reopen Copycat before checking for updates.');
   if(action==='cleanup'){
-   if(nativePending)throw Error('macOS is still verifying the update. Keep Guides open until it reports success or failure.');
+   if(nativePending)throw Error('macOS is still verifying the update. Keep Copycat open until it reports success or failure.');
    abort();await closeProxy();await idleRequests();if(pending)await pending;state('error','Update connections stopped. Check for updates again when ready.');return snapshot();
   }
   if(pending||phase==='cleanup')throw Error('Wait for the update operation to finish or retry update cleanup.');
@@ -79,7 +79,7 @@ function create(host){
   }else if(action==='download'){
    if(phase!=='available'||!offer)throw Error('Check for a compatible update before downloading.');
    cancellation=new CancellationToken();progress=0;state('downloading','Downloading the update. Your saved guides remain local.');
-   launch(async()=>{await updater.downloadUpdate(cancellation);await verifyNative();await closeProxy();state('ready','Verified and staged. It will apply at the next safe launch; Restart now also reopens Guides.');});
+   launch(async()=>{await updater.downloadUpdate(cancellation);await verifyNative();await closeProxy();state('ready','Verified and staged. It will apply at the next safe launch; Restart now also reopens Copycat.');});
   }else if(action==='restart'){
    if(phase!=='ready')throw Error('Download and verify a compatible update before restarting.');
    restart=true;detail='Restart requested. The SDK will first check saved work and stop capture resources.';emit();

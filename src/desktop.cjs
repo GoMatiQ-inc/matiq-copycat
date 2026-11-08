@@ -30,8 +30,8 @@ function launch(program,args,onMessage){
  async function stop(){
   if(child.exitCode!==null||child.signalCode!==null){await exited;return;}
   child.stdin.end('stop\n');
-  let timer;try{await Promise.race([exited,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Native capture did not stop. Retry cleanup before closing Guides.')),5000);})]);}
-  catch(error){child.kill('SIGKILL');let deadline;try{await Promise.race([exited.catch(()=>{}),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('The native helper is still present after forced stop. Keep Guides open and retry cleanup.')),2000);})]);}finally{clearTimeout(deadline);}throw error;}finally{clearTimeout(timer);}
+  let timer;try{await Promise.race([exited,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Native capture did not stop. Retry cleanup before closing Copycat.')),5000);})]);}
+  catch(error){child.kill('SIGKILL');let deadline;try{await Promise.race([exited.catch(()=>{}),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('The native helper is still present after forced stop. Keep Copycat open and retry cleanup.')),2000);})]);}finally{clearTimeout(deadline);}throw error;}finally{clearTimeout(timer);}
  }
  return {child,exited,stop};
 }

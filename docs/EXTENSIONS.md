@@ -4,7 +4,7 @@ One shared implementation lives in `extension/shared`. The build generates only 
 
 ## Build and development installation
 
-Use the pinned Node runtime and repository lockfile. Run `npm ci`, then `npm run build:extensions` on the development host under its storage guard. Python 3 with zipfile/zlib is required for deterministic ZIP creation. Files are sorted, timestamps and modes fixed. Record Node, Python and zlib versions when comparing builds. Output is `extensions-dist/matiq-guides-<browser>-<version>.zip` and an unpacked directory per browser. These are unsigned developer packages, not store-approved releases.
+Use the pinned Node runtime and repository lockfile. Run `npm ci`, then `npm run build:extensions` on the development host under its storage guard. Python 3 with zipfile/zlib is required for deterministic ZIP creation. Files are sorted, timestamps and modes fixed. Record Node, Python and zlib versions when comparing builds. Output is `extensions-dist/matiq-copycat-<browser>-<version>.zip` and an unpacked directory per browser. These are unsigned developer packages, not store-approved releases.
 
 For Chrome, open `chrome://extensions`, enable Developer mode, choose Load unpacked and select `extensions-dist/chrome`. For Edge use `edge://extensions` and `extensions-dist/edge`. For Firefox, use `about:debugging#/runtime/this-firefox`, Load Temporary Add-on, then select `extensions-dist/firefox/manifest.json`. Temporary Firefox add-ons do not survive browser restart; release distribution requires a genuinely Mozilla-signed package. Do not disable signing protections in a production browser profile.
 
