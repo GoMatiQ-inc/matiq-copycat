@@ -8,7 +8,7 @@ const safeError=error=>/Missing host permission|permission.*capture|capture.*per
 const initialized=(async()=>{const stored=(await api.storage.local.get(KEY))[KEY];if(stored){state={...state,...stored};if(state.phase==='recording'){state.phase='paused';state.error='The extension restarted. Reconnect, reconcile pending steps and explicitly resume.';}if(state.scope&&['recording','paused'].includes(state.phase)){let timer;try{const result=await Promise.race([tell('stop'),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('The selected page did not confirm stop.')),2000);})]);if(result?.stopped!==true)throw Error('The selected page did not confirm stop.');}catch{state.error=(state.error?state.error+' ':'')+'The previous page could not confirm its capture hooks stopped. Reload that selected page before resuming; review pending steps.';}finally{clearTimeout(timer);}}}await persist();})();
 async function persist(){await api.storage.local.set({[KEY]:state});if(state.scope)await api.action.setBadgeText({tabId:state.scope.tabId,text:active?'REC':state.phase==='paused'?'II':''}).catch(()=>{});}
 function enqueue(operation){if(++queued>12){queued--;deactivate();return Promise.reject(Error('The capture queue is full. Recording stopped; review pending steps before resuming.'));}const result=queue.then(()=>initialized).then(operation);queue=result.catch(()=>{}).finally(()=>queued--);return result;}
-async function tell(command,extra={}){if(!state.scope)return;return api.tabs.sendMessage(state.scope.tabId,{type:'guides-control',command,...extra});}
+async function tell(command,extra={}){if(!state.scope)return;let timer;try{return await Promise.race([api.tabs.sendMessage(state.scope.tabId,{type:'guides-control',command,...extra}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('The selected page did not answer capture control within two seconds. Review the guide and explicitly resume when the page responds.')),2000);})]);}finally{clearTimeout(timer);}}
 function deactivate(){active=false;generation++;baseline=null;if(state.scope)api.action.setBadgeText({tabId:state.scope.tabId,text:''}).catch(()=>{});if(screenshotWait){clearTimeout(screenshotWait.timer);screenshotWait.resolve();screenshotWait=null;}if(state.scope)tell('stop').catch(()=>{});}
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
 const revision=value=>Number.isSafeInteger(value)&&value>=0;
@@ -71,7 +71,13 @@ async function append(event,context){
   }catch(error){if(cached&&documentTransitionError(error))image=cached;else throw error;}
  }else if(cached)image=cached;
  else{
-  const current=await tell('context').catch(()=>null);if(!current)throw Error('Navigation interrupted the action screenshot. Reconnect on the new page and review the missing action.');image=await screenshot();origin=current.origin;target=null;action='navigate';warning='Navigation completed before the action screenshot; a navigation instruction was recorded.';
+  let current=null;const contextDeadline=Date.now()+1500;
+  for(let attempt=0;attempt<30&&!current&&active&&token===generation&&Date.now()<contextDeadline;attempt++){
+   current=await tell('context').catch(error=>{if(documentTransitionError(error))return null;throw error;});
+   if(!current)await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  if(!active||token!==generation)return;
+  if(!current)throw Error('Navigation interrupted the action screenshot. Reconnect on the new page and review the missing action.');image=await screenshot();origin=current.origin;target=null;action='navigate';warning='Navigation completed before the action screenshot; a navigation instruction was recorded.';
  }
  if(!active||token!==generation)return;
  const value={id:event.id,session:state.capture.id,scope:state.capture.scope,sequence:state.nextSequence,at:event.at,source:'browser',origin,action,control:event.control,label:event.label,target,image};
