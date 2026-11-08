@@ -210,10 +210,10 @@ if args.count == 2 && args[1] == "probe" {
     exit(0)
 }
 guard args.count >= 2, ["list","record"].contains(args[1]) else { fail("Use list, probe, or record with the selected window ID.") }
-guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else { fail("Screen Recording permission is required. Enable MatiQ Guides in System Settings → Privacy & Security → Screen Recording, then retry.") }
+guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else { fail("Screen Recording permission is required. In System Settings → Privacy & Security → Screen Recording, enable the application named in the macOS permission request, then quit and reopen it before retrying.") }
 let recording = args[1] == "record"
 if recording && !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary) {
-    fail("Accessibility permission is required for control labels. Enable MatiQ Guides in System Settings → Privacy & Security → Accessibility, then retry.")
+    fail("Accessibility permission is required for control labels. In System Settings → Privacy & Security → Accessibility, enable the application named in the macOS permission request, then retry.")
 }
 NSApplication.shared.setActivationPolicy(.prohibited)
 var recorder: Recorder?
