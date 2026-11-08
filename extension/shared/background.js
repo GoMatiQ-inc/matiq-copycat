@@ -43,7 +43,7 @@ async function activate(){
  const token=++generation;if(!state.scope||!state.capture||state.capture.phase!=='recording')throw Error('Select a guide session and tab before recording.');
  await api.windows.update(state.scope.windowId,{focused:true});if(token!==generation||!ready)throw Error('Capture was interrupted before activation. Reconnect and explicitly resume.');
  await api.scripting.executeScript({target:{tabId:state.scope.tabId},files:['content.js']});if(token!==generation||!ready)throw Error('Capture was interrupted before activation. Reconnect and explicitly resume.');
- active=true;const context=await tell('start');lastNavigation=context.navigation;if(token!==generation||!ready){await tell('stop');throw Error('Capture was paused during activation. Explicitly resume when ready.');}
+ active=true;const context=await tell('start');if(!uuid(context.navigation))throw Error('The selected page capture adapter is outdated. Reload that page and explicitly resume after updating the extension.');lastNavigation=context.navigation;if(token!==generation||!ready){await tell('stop');throw Error('Capture was paused during activation. Explicitly resume when ready.');}
  state.phase='recording';state.error='';await persist();await snapshot(context);
 }
 const viewportEqual=(a,b)=>a&&b&&['width','height','x','y','scale','dpr'].every(key=>a[key]===b[key]);
@@ -60,29 +60,42 @@ async function snapshot(context){
  catch(error){if(!documentTransitionError(error))throw error;/* The baseline is optional. A canonical action still needs a verified image or a visible interruption. */}
 }
 async function flush(){while(state.outbox.length){const event=state.outbox[0];const result=await rpc('step',{event});if(result.id!==event.id||result.ack!==event.sequence||result.session!==event.session)throw Error('Guides returned an unexpected acknowledgement. Keep the buffer and reconnect.');state.outbox.shift();state.serverRevision=Math.max(state.serverRevision,result.revision);await persist();}}
+async function navigationSnapshot(previous,token){
+ const deadline=Date.now()+3000;
+ for(let attempt=0;attempt<60&&active&&token===generation&&Date.now()<deadline;attempt++){
+  try{
+   const before=await tell('context');
+   if(before.doc!==previous.doc||before.navigation!==previous.navigation){
+    const image=await screenshot(),after=await tell('context');
+    if(before.doc===after.doc&&before.navigation===after.navigation&&before.revision===after.revision&&viewportEqual(before.viewport,after.viewport))return {image,context:after};
+   }
+  }catch(error){if(!documentTransitionError(error))throw error;}
+  await new Promise(resolve=>setTimeout(resolve,50));
+ }
+ if(!active||token!==generation)return null;
+ throw Error('Navigation did not produce a stable screenshot within three seconds. Capture paused; reopen the extension on the new page and review the missing action.');
+}
 async function append(event,context){
- if(!active)return;unrecordedActions.add(event.id);const token=generation,cached=priorImage(context);let image,target=context.target,origin=context.origin,action=event.action,warning='';
+ if(!active)return;unrecordedActions.add(event.id);const token=generation,cached=priorImage(context);let image,target=context.target,origin=context.origin,action=event.action,warning='',navigationFallback=false;
  await waitScreenshot();const before=await tell('context',{id:event.id}).catch(error=>{if(documentTransitionError(error))return null;throw error;});
  if(before&&before.doc===context.doc){
   try{
    image=await screenshot();const after=await tell('context',{id:event.id});
    if(after.doc!==context.doc||!viewportEqual(before.viewport,after.viewport)||before.revision!==after.revision){if(cached)image=cached;else throw Error('The page changed before a reliable action screenshot could be captured. This action was not saved. Review it and add a manual step.');}
    else if(JSON.stringify(after.target)!==JSON.stringify(context.target)){target=null;warning='An interaction target changed before its screenshot. Review and highlight that step manually.';}
-  }catch(error){if(cached&&documentTransitionError(error))image=cached;else throw error;}
+  }catch(error){
+   if(!documentTransitionError(error))throw error;
+   if(cached)image=cached;
+   else{const settled=await navigationSnapshot(context,token);if(!settled)return;image=settled.image;origin=settled.context.origin;target=null;action='navigate';navigationFallback=true;warning='Navigation completed before the action screenshot; a navigation instruction was recorded.';}
+  }
  }else if(cached)image=cached;
  else{
-  let current=null;const contextDeadline=Date.now()+1500;
-  for(let attempt=0;attempt<30&&!current&&active&&token===generation&&Date.now()<contextDeadline;attempt++){
-   current=await tell('context').catch(error=>{if(documentTransitionError(error))return null;throw error;});
-   if(!current)await new Promise(resolve=>setTimeout(resolve,50));
-  }
-  if(!active||token!==generation)return;
-  if(!current)throw Error('Navigation interrupted the action screenshot. Reconnect on the new page and review the missing action.');image=await screenshot();origin=current.origin;target=null;action='navigate';warning='Navigation completed before the action screenshot; a navigation instruction was recorded.';
+  const settled=await navigationSnapshot(context,token);if(!settled)return;image=settled.image;origin=settled.context.origin;target=null;action='navigate';navigationFallback=true;warning='Navigation completed before the action screenshot; a navigation instruction was recorded.';
  }
  if(!active||token!==generation)return;
  const value={id:event.id,session:state.capture.id,scope:state.capture.scope,sequence:state.nextSequence,at:event.at,source:'browser',origin,action,control:event.control,label:event.label,target,image};
  if(state.outbox.length>=MAX_PENDING||JSON.stringify([...state.outbox,value]).length>MAX_BUFFER_BYTES)throw Error('The pending buffer reached four steps or 3 MiB. Recording stopped. Reconnect and flush it before continuing.');
- state.outbox.push(value);state.nextSequence++;if(event.navigationExpected)navigationExpected=true;if(warning)state.warnings.push(warning);await persist();unrecordedActions.delete(event.id);await flush();if(warning)await rpc('warning',{reason:warning});
+ state.outbox.push(value);state.nextSequence++;if(event.navigationExpected||navigationFallback)navigationExpected=true;if(warning)state.warnings.push(warning);await persist();unrecordedActions.delete(event.id);await flush();if(warning)await rpc('warning',{reason:warning});
 }
 async function recordNavigation(event,context){
  if(context.navigation&&context.navigation===lastNavigation){unrecordedActions.delete(event.id);await snapshot(context);return;}
