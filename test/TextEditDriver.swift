@@ -94,7 +94,12 @@ NSWorkspace.shared.open([document],withApplicationAt:URL(fileURLWithPath:"/Syste
     let names=descendants(window).filter{["AXButton","AXCheckBox"].contains(text($0,kAXRoleAttribute))}.prefix(30).map{["role":text($0,kAXRoleAttribute),"title":text($0,kAXTitleAttribute),"description":text($0,kAXDescriptionAttribute),"help":text($0,kAXHelpAttribute)]}
     output(["type":"ready","pid":running.processIdentifier,"window":id,"controls":names]);return
    }
-   if attempts>=40 {fail("The controlled TextEdit document did not become accessible despite granted test-driver permissions. Inspect the owned document window and on-screen window metadata.");return}
+   if attempts>=40 {
+    let windows=attribute(AXUIElementCreateApplication(running.processIdentifier),kAXWindowsAttribute) as? [AXUIElement] ?? []
+    let ownRows=rows.filter{($0[kCGWindowOwnerPID as String] as? Int32)==running.processIdentifier}
+    output(["type":"fixture-diagnostic","accessibility":AXIsProcessTrusted(),"screen":CGPreflightScreenCaptureAccess(),"ownedAXWindowTitles":windows.map{text($0,kAXTitleAttribute)},"ownedScreenWindows":ownRows.map{["title":$0[kCGWindowName as String] as? String ?? "","layer":$0[kCGWindowLayer as String] as? Int ?? -1]}])
+    fail("The controlled TextEdit document did not become accessible despite granted test-driver permissions. Inspect the owned fixture window metadata.");return
+   }
    DispatchQueue.main.asyncAfter(deadline:.now()+0.25){ready()}
   }
   ready()

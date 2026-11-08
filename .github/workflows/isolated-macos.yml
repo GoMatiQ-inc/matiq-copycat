@@ -25,6 +25,7 @@ jobs:
       GUIDES_NATIVE_TEST_VM: tart
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       GUIDES_TEST_SCOPE_TRANSITIONS: '1'
+      GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
       GUIDES_RUN_PACKAGED_QUALIFICATION: ${{ vars.GUIDES_RUN_PACKAGED_QUALIFICATION }}
       GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
     steps:
@@ -41,11 +42,11 @@ jobs:
           /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
           npm ci --no-audit --no-fund
           npm test
-          if [[ "$GUIDES_BROWSER_DIAGNOSTIC" == *-mixed ]]; then
-            fixture_probe="$RUNNER_TEMP/guides-textedit-permission-probe"
-            xcrun swiftc -O -target arm64-apple-macos14.2 -module-cache-path "$RUNNER_TEMP/guides-swift-modules" test/TextEditDriver.swift -o "$fixture_probe"
-            "$fixture_probe" --probe --request
-            rm -- "$fixture_probe"
+          if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && "$GUIDES_BROWSER_DIAGNOSTIC" == *-mixed ]]; then
+            node <<'NODE'
+          const fs=require('node:fs/promises'),path=require('node:path');
+          (async()=>{const temporary=await fs.mkdtemp(path.join(process.env.RUNNER_TEMP,'guides-textedit-preflight-'));try{const session=await require('./scripts/textedit-workflow.cjs').openTextEdit({root:process.cwd(),temporary});try{console.log('PASS: CI-context controlled TextEdit document and on-screen window are accessible.');}finally{await session.close();}}finally{await fs.rm(temporary,{recursive:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
+          NODE
           fi
           if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && -z "$GUIDES_BROWSER_DIAGNOSTIC" ]]; then
             node scripts/electron-vm-preflight.cjs
