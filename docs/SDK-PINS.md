@@ -10,4 +10,4 @@ The dependency URLs reference the sdk-v0.1.3 GitHub release; package-lock.json a
 | matiq-solutions-runtime-0.1.3.tgz | d78e186a4ff89168a1b227ae97a314f4060693527fc1a6039d0c894bcd2d9e92 |
 | matiq-solutions-shell-0.1.3.tgz | 51d96da34fe4b26b16638845e071673e0485720259ce3f1cea8a7e4bacdcd78b |
 
-Use the SDK pack-app flow against the already signed standalone Resources directory, with `--extra native`, to include the same signed bridge bytes in the `.mqt`. The suite repository receives release metadata, never a copy of Guides implementation code. No runtime or SDK upgrade is implied by a tool patch release.
+Use the SDK pack-app flow against the already signed standalone Resources directory, with `--extra native`, to include the same signed bridge bytes in the `.mqt`. The suite repository receives release metadata, never a copy of Copycat implementation code. No runtime or SDK upgrade is implied by a tool patch release.

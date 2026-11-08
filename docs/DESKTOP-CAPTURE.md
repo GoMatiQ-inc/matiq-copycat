@@ -4,7 +4,7 @@ Unpublished development implementation with controlled signed standalone/suite b
 
 ## Scope and setup
 
-Create and save a guide. Choose **Choose desktop window**. Guides explains why Screen Recording permission is needed before listing available windows. Select the intended application/window, then choose **Start / resume selected window** and approve recording. Accessibility permission supplies control context. Denial is an actionable error, never a successful empty capture.
+Create and save a guide. Choose **Choose desktop window**. Copycat explains why Screen Recording permission is needed before listing available windows. Select the intended application/window, then choose **Start / resume selected window** and approve recording. Accessibility permission supplies control context. Denial is an actionable error, never a successful empty capture.
 
 Window titles are used transiently to make selection understandable. They are not retained as guide source context or logged. The process identity must still match when recording starts. Windows without reliable OS application identity are excluded from selection. Desktop 0.1.2 uses the OS localized application name or bundle identity when ScreenCaptureKit returns an empty application name. Browser windows from the supported browsers use the extension instead; browser and desktop sessions cannot record concurrently into the guide. Stop one capture before appending from the other source.
 
@@ -14,7 +14,7 @@ A short-lived native helper uses ScreenCaptureKit window screenshots and Accessi
 
 ## Lifecycle and failure behavior
 
-Recording status is visible in Guides. Pause, stop and cancel close and await the owned helper; resume explicitly selects a window again. The private pipe closes when its parent disappears, stopping the helper. In-flight screenshots that cannot finish before a stop create a review warning. Step delivery already emitted before a stop is drained before the guide transition.
+Recording status is visible in Copycat. Pause, stop and cancel close and await the owned helper; resume explicitly selects a window again. The private pipe closes when its parent disappears, stopping the helper. In-flight screenshots that cannot finish before a stop create a review warning. Step delivery already emitted before a stop is drained before the guide transition.
 
 Window movement recalculates screenshot scale and target coordinates per action. A display configuration change, sleep/lock, application/window closure, permission revocation, capture failure or capture overload stops the helper and visibly pauses capture. Actions faster than the single pending screenshot can be handled produce a warning instead of silently dropped steps. Retained screenshots use the same canonical guide assets, atomic persistence, annotations, redaction and exports as browser/manual steps.
 

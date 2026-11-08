@@ -28,7 +28,7 @@ async function install({host,browser}){
     const allowedPaths=Object.entries(browserPaths).map(([name,parts])=>({name,path:path.join(app.getPath('appData'),...parts,identity.nativeHost+'.json')}));const match=allowedPaths.find(item=>item.path===file);if(!match)throw Error('Bridge registry contains an unknown destination. Inspect it before retrying.');
     const manifest={name:identity.nativeHost,description:'MatiQ Copycat local workflow capture bridge',path:selected.path,type:'stdio',...(match.name==='firefox'?{allowed_extensions:[identity.firefoxId]}:{allowed_origins:[`chrome-extension://${identity.chromiumId}/`]})};
     const content=JSON.stringify(manifest,null,2)+'\n',expected=P.hash(Buffer.from(content));
-    try{const existing=await fs.readFile(file),actual=P.hash(existing);if(actual!==expected&&(!registry.manifests[file]||actual!==registry.manifests[file]))throw Error('A native-host registration changed outside Guides. Preserve it and review its owner before retrying setup.');}catch(error){if(error.code!=='ENOENT')throw error;}
+    try{const existing=await fs.readFile(file),actual=P.hash(existing);if(actual!==expected&&(!registry.manifests[file]||actual!==registry.manifests[file]))throw Error('A native-host registration changed outside Copycat. Preserve it and review its owner before retrying setup.');}catch(error){if(error.code!=='ENOENT')throw error;}
     await fs.mkdir(path.dirname(file),{recursive:true,mode:0o700});await P.atomicBytes(file,content);registry.manifests[file]=expected;
   }
   registry.consumers[app.getName()==='MatiQ Solutions'?'suite':'standalone']={toolVersion:host.manifest.version,bridgeVersion,protocol,resourceDir:host.resourceDir};
