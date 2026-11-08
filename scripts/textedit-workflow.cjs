@@ -26,12 +26,13 @@ async function openTextEdit({root,temporary}){
 async function captureTextEditWorkflow({app,editor,file,root,temporary,candidate}){
  const before=JSON.parse(await fs.readFile(file,'utf8')),session=await openTextEdit({root,temporary});let proof;
  try{
-  await session.command('select','selected');await editor.getByRole('button',{name:'Choose desktop window',exact:true}).click();await editor.locator('#desktop-window').selectOption(String(session.ready.window));
+  await editor.getByRole('button',{name:'Choose desktop window',exact:true}).click();await editor.locator('#desktop-window').selectOption(String(session.ready.window));
   await editor.getByRole('button',{name:'Start / resume selected window',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
   const hooks=captureTree(capture(app.process())).filter(row=>identity(row.pid)?.endsWith('/guides-capture'));assert.equal(hooks.length,1,'The actual signed helper must observe the selected TextEdit window.');
+  const selected=await session.command('select','selected');assert.ok(selected.selectedLength>0,'The owned TextEdit document must select actual fixture text before formatting.');
   const click=await session.command('bold','clicked');assert.equal(click.window,session.ready.window);
   await editor.waitForFunction(n=>document.querySelectorAll('#steps li').length===n,before.guide.steps.length+1);
-  await session.command('save','saved');const formatted=await fs.readFile(session.document,'utf8');assert.ok(/\\b(?:\s|\\)/.test(formatted),'The real TextEdit document must contain bold formatting after the actual button click and save.');
+  await session.command('save','saved');let formatted='';for(let i=0;i<100;i++){formatted=await fs.readFile(session.document,'utf8');if(/\\b(?:\s|\\)/.test(formatted))break;await new Promise(resolve=>setTimeout(resolve,50));}assert.ok(/\\b(?:\s|\\)/.test(formatted),'The real TextEdit document must contain bold formatting after the actual button click and completed save.');
   await new Promise(resolve=>setTimeout(resolve,300));await editor.getByRole('button',{name:'Stop capture',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));for(const row of hooks)await verifyStopped(row);
   const project=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(project.guide.steps.length,before.guide.steps.length+1,'Keyboard save must not become a captured step.');assert.deepEqual(project.guide.steps.slice(0,before.guide.steps.length),before.guide.steps,'Appending native capture must preserve browser steps.');
   const step=project.guide.steps.at(-1);assert.equal(step.instruction,'Click “bold”','The signed fix must use the real accessible control description.');assert.equal(step.kind,'desktop');assert.ok(['TextEdit','com.apple.TextEdit'].includes(step.source.application),'Retain the real TextEdit name or OS bundle identity.');assert.ok(project.assets[step.asset]);assert.ok(project.guide.steps.some(step=>step.kind==='browser'));assert.ok(step.annotations.some(a=>a.type==='box'));

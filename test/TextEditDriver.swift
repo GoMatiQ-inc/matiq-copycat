@@ -62,7 +62,11 @@ FileHandle.standardInput.readabilityHandler={ handle in
  let data=handle.availableData,commands=String(data:data,encoding:.utf8) ?? ""
  DispatchQueue.main.async {
   if data.isEmpty||commands.contains("stop") {target?.terminate();app.terminate(nil);return}
-  if commands.contains("select") {focus { _ in keys(0,flags:.maskCommand);DispatchQueue.main.asyncAfter(deadline:.now()+0.2){output(["type":"selected"])}}}
+  if commands.contains("select") {focus { _ in keys(0,flags:.maskCommand);DispatchQueue.main.asyncAfter(deadline:.now()+0.2){
+   let focused=attribute(AXUIElementCreateApplication(target!.processIdentifier),kAXFocusedUIElementAttribute) as! AXUIElement?
+   var range=CFRange();if let focused=focused,let value=attribute(focused,kAXSelectedTextRangeAttribute),CFGetTypeID(value)==AXValueGetTypeID(){_=AXValueGetValue(value as! AXValue,.cfRange,&range)}
+   output(["type":"selected","selectedLength":range.length,"focusedRole":focused.map{text($0,kAXRoleAttribute)} ?? ""])
+  }}}
   else if commands.contains("bold") {focus { window in
    let controls=descendants(window)
    guard let button=controls.first(where:{["AXButton","AXCheckBox"].contains(text($0,kAXRoleAttribute)) && [text($0,kAXTitleAttribute),text($0,kAXDescriptionAttribute),text($0,kAXHelpAttribute)].contains(where:{$0.lowercased()=="bold"})}),let r=bounds(button),r.width>0,r.height>0 else {fail("The controlled TextEdit document has no accessible Bold control.");return}
