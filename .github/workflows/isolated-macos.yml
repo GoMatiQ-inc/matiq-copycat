@@ -50,6 +50,7 @@ jobs:
       - name: Signed projects and six real browser/form journeys in the guest
         env:
           GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
+          GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
         run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 10 -- node scripts/packaged-vm-project.cjs --browser-matrix
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
