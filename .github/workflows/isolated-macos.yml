@@ -40,6 +40,12 @@ jobs:
           /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
           npm ci --no-audit --no-fund
           npm test
+          if [[ "$GUIDES_BROWSER_DIAGNOSTIC" == *-mixed ]]; then
+            fixture_probe="$RUNNER_TEMP/guides-textedit-permission-probe"
+            xcrun swiftc -O -target arm64-apple-macos14.2 -module-cache-path "$RUNNER_TEMP/guides-swift-modules" test/TextEditDriver.swift -o "$fixture_probe"
+            "$fixture_probe" --probe
+            rm -- "$fixture_probe"
+          fi
           if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && -z "$GUIDES_BROWSER_DIAGNOSTIC" ]]; then
             node scripts/electron-vm-preflight.cjs
             npm run test:desktop

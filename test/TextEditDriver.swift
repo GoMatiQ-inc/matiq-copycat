@@ -28,6 +28,13 @@ func bounds(_ element: AXUIElement) -> CGRect? {
 }
 let app=NSApplication.shared
 app.setActivationPolicy(.accessory)
+let access=AXIsProcessTrusted(),screen=CGPreflightScreenCaptureAccess()
+if CommandLine.arguments.contains("--probe") {
+ output(["accessibility":access,"screen":screen]);exit(access && screen ? 0 : 1)
+}
+guard access && screen else {
+ output(["type":"error","reason":"Authorize the CI test driver in macOS Accessibility and Screen Recording inside Tart before running the controlled TextEdit fixture.","accessibility":access,"screen":screen]);exit(1)
+}
 let document=URL(fileURLWithPath:CommandLine.arguments[1])
 var target: NSRunningApplication?
 var windowID: UInt32=0
@@ -86,7 +93,7 @@ NSWorkspace.shared.open([document],withApplicationAt:URL(fileURLWithPath:"/Syste
     let names=descendants(window).filter{["AXButton","AXCheckBox"].contains(text($0,kAXRoleAttribute))}.prefix(30).map{["role":text($0,kAXRoleAttribute),"title":text($0,kAXTitleAttribute),"description":text($0,kAXDescriptionAttribute),"help":text($0,kAXHelpAttribute)]}
     output(["type":"ready","pid":running.processIdentifier,"window":id,"controls":names]);return
    }
-   if attempts>=40 {fail("The new controlled TextEdit document did not become accessible.");return}
+   if attempts>=40 {fail("The controlled TextEdit document did not become accessible despite granted test-driver permissions. Inspect the owned document window and on-screen window metadata.");return}
    DispatchQueue.main.asyncAfter(deadline:.now()+0.25){ready()}
   }
   ready()
