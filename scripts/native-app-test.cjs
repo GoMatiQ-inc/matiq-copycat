@@ -73,6 +73,19 @@ async function main(){
   async function count(expected){await page.waitForFunction(n=>document.querySelectorAll('#steps li').length===n,expected);}
   async function start(){await page.getByRole('button',{name:'Start / resume selected window',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));assert.equal((await nativeRows()).length,1,'Exactly one owned native recorder must be active.');}
   async function click(){write('click');const sent=await next('click-sent');assert.ok(sent.focused,'The controlled app must own foreground focus.');await next('clicked');}
+  if(process.env.GUIDES_TEST_ACCESSIBILITY_DENIED==='1'){
+   const bundle=path.dirname(path.dirname(path.dirname(executable))),client=execFileSync('/usr/libexec/PlistBuddy',['-c','Print:CFBundleIdentifier',path.join(bundle,'Contents/Info.plist')],{encoding:'utf8'}).trim();
+   assert.match(client,/^[a-zA-Z0-9.-]+$/);
+   const effective=()=>JSON.parse(execFileSync('sudo',['-n','sqlite3','-json','/Library/Application Support/com.apple.TCC/TCC.db','select client,auth_value,auth_reason,last_modified from access where service="kTCCServiceAccessibility" and client="'+client+'";'],{encoding:'utf8'}));
+   const denied=effective();assert.equal(denied.length,1);assert.equal(denied[0].auth_value,0,'Independently revoke the intended application permission before this test.');
+   await page.getByRole('button',{name:'Start / resume selected window',exact:true}).click();
+   await page.waitForFunction(()=>document.querySelector('#message').textContent.includes('Accessibility permission is required'));
+   await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));
+   assert.equal((await nativeRows()).length,0);await click();await new Promise(resolve=>setTimeout(resolve,400));
+   const deniedProject=await project();assert.equal(deniedProject.guide.steps.length,0);assert.equal(Object.keys(deniedProject.assets).length,0);assert.deepEqual(effective(),denied);
+   await page.getByRole('button',{name:'Stop capture',exact:true}).click();
+   proof={result:'passed',packaged:true,form:suite?'suite':'standalone',suiteVersion,sourceCommit:candidate.commit,harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),tool:candidate.version,macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,sdk:'0.1.3',electron:await app.evaluate(()=>process.versions.electron),effectiveAccessibility:denied,checks:['real OS Accessibility denial independently verified before and after capture attempt','released signed packaged capture fails visibly with actionable permission guidance','capture becomes paused; no owned recorder remains','actual selected-window click adds no step or image','explicit Stop and normal application quit'],qualification:'Actual OS authorization and packaged capture. Application approval dialogs controlled; fresh OS-profile setup and active recording revocation remain separate.'};
+  }else{
   await start();await click();await count(1);
   let p=await project();assert.equal(p.guide.steps[0].kind,'desktop');assert.equal(p.guide.steps[0].instruction,'Click “Open settings”');assert.ok(p.assets[p.guide.steps[0].asset]);assert.ok(!JSON.stringify(p.guide.steps).includes('CONTROLLED-SECRET'));
   const firstID=p.guide.steps[0].id,guideID=p.guide.id;let hooks=await nativeRows();
@@ -141,6 +154,7 @@ async function main(){
   await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
   if(!executable){const status=await app.evaluate(()=>global.fixtureInstance.status());assert.equal(status.busy,false);}
   proof={result:'passed',packaged:!!executable,form:suite?'suite':'standalone',suiteVersion,slowStoragePressure:process.env.GUIDES_PRESSURE_TEST==='1',activeNativeCaptureCrash:process.env.GUIDES_TEST_CAPTURE_CRASH==='1',windowMovement,displayChange,sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','native process absence verified'],qualification:suite?'actual signed packaged suite with real SDK package installation; approval dialogs controlled; public marketplace and fresh permissions separate':executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
+  }
   await closeNormally();
  }catch(error){console.error('Native journey failed:',error.message);throw error;}finally{
   if(app){owned=Array.from(new Map([...owned,...await runtimeRows()].map(row=>[row.pid,row])).values());}
