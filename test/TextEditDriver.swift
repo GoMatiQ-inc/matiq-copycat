@@ -79,15 +79,18 @@ FileHandle.standardInput.readabilityHandler={ handle in
 }
 let configuration=NSWorkspace.OpenConfiguration()
 configuration.createsNewApplicationInstance=true
+configuration.activates=true
 configuration.arguments=["-ApplePersistenceIgnoreState","YES","-NSQuitAlwaysKeepsWindows","NO"]
 NSWorkspace.shared.open([document],withApplicationAt:URL(fileURLWithPath:"/System/Applications/TextEdit.app"),configuration:configuration) { running,error in
  DispatchQueue.main.async {
   guard let running=running,running.bundleIdentifier=="com.apple.TextEdit" else {fail("A fresh TextEdit instance could not be launched.");return}
   target=running
+  running.activate(options:[.activateIgnoringOtherApps,.activateAllWindows])
   output(["type":"owned","pid":running.processIdentifier])
   var attempts=0
   func ready() {
    attempts+=1
+   if let window=ownedWindow() { AXUIElementPerformAction(window,kAXRaiseAction as CFString) }
    let rows=CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] ?? []
    if let window=ownedWindow(),let row=rows.first(where:{($0[kCGWindowOwnerPID as String] as? Int32)==running.processIdentifier && ($0[kCGWindowLayer as String] as? Int)==0 && ($0[kCGWindowName as String] as? String ?? "").contains(document.deletingPathExtension().lastPathComponent)}),let id=row[kCGWindowNumber as String] as? UInt32 {
     windowID=id
