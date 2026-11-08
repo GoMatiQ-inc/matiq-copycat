@@ -25,7 +25,6 @@ jobs:
       GUIDES_NATIVE_TEST_VM: tart
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
       GUIDES_TEST_SCOPE_TRANSITIONS: '1'
-      GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
       GUIDES_RUN_PACKAGED_QUALIFICATION: ${{ vars.GUIDES_RUN_PACKAGED_QUALIFICATION }}
       GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
     steps:
@@ -37,6 +36,8 @@ jobs:
       - name: Verify VM isolation before installing or opening anything
         run: node -e "require('./scripts/native-test-isolation.cjs').assertNativeTestIsolation()"
       - name: Fast feature regression in the guest
+        env:
+          GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
         shell: bash
         run: |
           /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
@@ -63,6 +64,7 @@ jobs:
       - name: Signed packaged qualification in the guest
         if: env.GUIDES_RUN_PACKAGED_QUALIFICATION == 'true'
         env:
+          GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
           GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
           GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
         run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 10 -- node scripts/packaged-vm-project.cjs --browser-matrix
