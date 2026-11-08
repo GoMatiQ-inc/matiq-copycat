@@ -25,8 +25,9 @@ async function main(){
    const file=path.join(launched.library,incoming.guide.id+'.mqguide'),original=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(original.guide.id,incoming.guide.id);assert.ok(JSON.stringify(original.guide.steps)===JSON.stringify(incoming.guide.steps),'Import changed captured ordered steps.');assert.ok(JSON.stringify(original.assets)===JSON.stringify(incoming.assets),'Import changed captured screenshot assets.');
    phase='flush interrupted edit draft';await page.getByLabel('Notes',{exact:true}).fill('Recovered interrupted edit');
    await app.evaluate(({app,dialog})=>{global.guidesRecoveryCloseError='';dialog.showErrorBox=(_title,text)=>{global.guidesRecoveryCloseError=text;};app.quit();});
-   for(let i=0;i<100;i++){if(await app.evaluate(()=>global.guidesRecoveryCloseError))break;await new Promise(resolve=>setTimeout(resolve,25));}
-   assert.match(await app.evaluate(()=>global.guidesRecoveryCloseError),/unsaved|save.*guide|busy/i);assert.equal(JSON.parse(await fs.readFile(file+'.draft','utf8')).guide.steps[0].notes,'Recovered interrupted edit');
+   const closeReason=async()=>suite?await app.context().pages().find(p=>p.url().endsWith('/app/ui/index.html')).locator('#activity').innerText():await app.evaluate(()=>global.guidesRecoveryCloseError);
+   for(let i=0;i<100;i++){if(/unsaved|save.*guide|busy/i.test(await closeReason()))break;await new Promise(resolve=>setTimeout(resolve,25));}
+   assert.equal(child.exitCode,null,'The host must remain open while the guide has unsaved edits.');assert.match(await closeReason(),/unsaved|save.*guide|busy/i);assert.equal(JSON.parse(await fs.readFile(file+'.draft','utf8')).guide.steps[0].notes,'Recovered interrupted edit');
    await crash();assert.ok(JSON.stringify(JSON.parse(await fs.readFile(file,'utf8')))===JSON.stringify(original),'An interrupted edit must preserve the completed save.');
    await recover(suite,profile,'Recovered interrupted edit');await save();const saved=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(saved.guide.id,original.guide.id);assert.equal(saved.guide.steps[0].id,original.guide.steps[0].id);assert.ok(JSON.stringify(saved.assets)===JSON.stringify(original.assets),'Draft recovery changed screenshot assets.');await assert.rejects(fs.access(file+'.draft'),{code:'ENOENT'});
    phase='hold durable pending rename';await page.getByLabel('Notes',{exact:true}).fill('Recovered durable pending save');
@@ -41,7 +42,7 @@ async function main(){
    receipts.push({form:suite?'suite':'standalone',tool:launched.candidate.version,toolSource:launched.candidate.commit,checks:['actual captured standalone mixed project imports into suite, then recovered suite export imports into standalone with stable ordered steps/assets','unsaved close visibly refused and draft flushed','real app termination and stale ownership recovery','explicit draft recovery restores stable guide/step identities','controlled interruption after real pending write/fsync preserves completed save','explicit pending-save recovery and normal save remove pending files','normal final exit and independent owned cleanup']});
   }
   proof={passed:true,scope:'Real signed packaged crash recovery; only the final owned-file rename is held as a controlled failure fixture.',harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),receipts,cleanupVerified:true};
- }catch(error){console.error('Packaged recovery failed in phase: '+phase);console.error(error.message.slice(0,1000));throw error;}finally{await cleanupDesktop({app,owned,temporary,watchdog});}
+ }catch(error){console.error('Packaged recovery failed in phase: '+phase);console.error(error.message.slice(0,1000));if(app&&child?.exitCode===null)await crash();throw error;}finally{await cleanupDesktop({app,owned,temporary,watchdog});}
  await fs.writeFile(path.join(process.env.RUNNER_TEMP,'matiq-guides-packaged-recovery-proof.json'),JSON.stringify(proof,null,2)+'\n');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
