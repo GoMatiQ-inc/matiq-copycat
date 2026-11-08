@@ -1,6 +1,6 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let updateState={enabled:false},captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,exportCleanup=false,busy=false,draftTimer=null;
+let updateState={enabled:false},captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,exportCleanup=false,busy=false,draftTimer=null,draftWrite=null;
 window.guidesDispose=()=>{clearTimeout(draftTimer);};
 window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
@@ -9,7 +9,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const step=()=>project?.guide.steps.find(s=>s.id===selected);
 function message(error=''){$('message').textContent=error.message||error;}
 function state(label){$('save-state').textContent=label;}
-function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)request('draft',project).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
+function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)draftWrite=Promise.resolve(draftWrite).then(()=>request('draft',project)).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
 const historySnapshot=()=>({...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}});
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy||captureStatus&&['recording','paused'].includes(captureStatus.phase))return;remember();fn();changed();draw();}
@@ -53,7 +53,7 @@ for(const field of ['title','description','instruction','notes'])$(field).addEve
 $('search').oninput=drawLibrary;
 $('new').onclick=()=>run(async()=>accept(await request('new')));
 $('import').onclick=()=>run(async()=>accept(await request('import')));
-$('save').onclick=()=>run(async()=>{const version=editVersion;state('Saving');try{const result=await request('save',clone(project));if(editVersion===version){modelRevision=Math.max(modelRevision,result.revision??modelRevision);window.guidesDirty=false;state('Saved');message(result.error);}else state('Unsaved');}catch(error){state('Failed to save');throw error;}});
+$('save').onclick=()=>run(async()=>{const version=editVersion;clearTimeout(draftTimer);state('Saving');try{await draftWrite;const result=await request('save',clone(project));if(editVersion===version){modelRevision=Math.max(modelRevision,result.revision??modelRevision);window.guidesDirty=false;state('Saved');message(result.error);}else state('Unsaved');}catch(error){state('Failed to save');throw error;}});
 $('back').onclick=$('library-nav').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your guide before returning to the library.');await list();project=null;selected=null;draw();});
 $('privacy-inline').onclick=$('privacy-nav').onclick=()=>{$('privacy').hidden=!$('privacy').hidden;};
 $('duplicate-guide').onclick=()=>run(async()=>{await request('duplicate');message('Saved copy added to your library.');});
