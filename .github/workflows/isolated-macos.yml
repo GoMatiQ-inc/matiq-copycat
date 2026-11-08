@@ -20,7 +20,7 @@ jobs:
     runs-on:
       group: MatiQ Mac CI
       labels: [self-hosted, macOS, ARM64, matiq-mac-mini]
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       GUIDES_NATIVE_TEST_VM: tart
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -47,16 +47,16 @@ jobs:
           fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'matiq-guides-isolated-sdk-proof.json'),JSON.stringify(proof,null,2)+'\n');
           NODE
           SCRIPT
-      - name: Signed standalone and suite project qualification in the guest
+      - name: Signed projects and six real browser/form journeys in the guest
         env:
           GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
-        run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- node scripts/packaged-vm-project.cjs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 10 -- node scripts/packaged-vm-project.cjs --browser-matrix
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: isolated-macos-proof
           path: |
-            ${{ runner.temp }}/matiq-guides-isolated-sdk-proof.json
-            ${{ runner.temp }}/matiq-guides-packaged-vm-proof.json
+            ${{ runner.temp }}/matiq-guides-*-proof.json
           if-no-files-found: error
           retention-days: 7
       - name: Retire the successful job dependency tree
