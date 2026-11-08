@@ -48,11 +48,13 @@ FileHandle.standardInput.readabilityHandler={ handle in
  DispatchQueue.main.async {
   if data.isEmpty||command.contains("quit")||command.contains("stop"){ app.terminate(nil) }
   else if command.contains("resize-next"){resizeNextClick=true;output(["type":"resize-armed"])}
-  else if command.contains("display-change"){
+  else if command.contains("display-change") || command.contains("display-scale"){
+   let scaling=command.contains("display-scale")
+   let options:CFDictionary?=scaling ? [kCGDisplayShowDuplicateLowResolutionModes as String:true] as CFDictionary:nil
    let display=CGMainDisplayID()
    guard let original=CGDisplayCopyDisplayMode(display),
-         let modes=CGDisplayCopyAllDisplayModes(display,nil) as? [CGDisplayMode],
-         let changed=modes.first(where:{$0.width>=1600 && $0.ioDisplayModeID != original.ioDisplayModeID}) else {
+         let modes=CGDisplayCopyAllDisplayModes(display,options) as? [CGDisplayMode],
+         let changed=modes.first(where:{scaling ? ($0.width==original.width && $0.height==original.height && $0.pixelWidth != original.pixelWidth):($0.width>=1600 && $0.ioDisplayModeID != original.ioDisplayModeID)}) else {
     output(["type":"display-changed","error":"No alternate actual display mode is available."]);return
    }
    var configuration:CGDisplayConfigRef?
@@ -63,8 +65,8 @@ FileHandle.standardInput.readabilityHandler={ handle in
    }
    let result=CGCompleteDisplayConfiguration(configuration,.forAppOnly)
    let actual=CGDisplayCopyDisplayMode(display)
-   output(["type":"display-changed","result":result.rawValue,"before":Int(original.ioDisplayModeID),"after":Int(actual?.ioDisplayModeID ?? 0),"beforeSize":[original.width,original.height],"afterSize":[actual?.width ?? 0,actual?.height ?? 0]])
-   DispatchQueue.main.asyncAfter(deadline:.now()+3){
+   output(["type":"display-changed","result":result.rawValue,"before":Int(original.ioDisplayModeID),"after":Int(actual?.ioDisplayModeID ?? 0),"beforeSize":[original.width,original.height],"afterSize":[actual?.width ?? 0,actual?.height ?? 0],"beforePixels":[original.pixelWidth,original.pixelHeight],"afterPixels":[actual?.pixelWidth ?? 0,actual?.pixelHeight ?? 0]])
+   DispatchQueue.main.asyncAfter(deadline:.now()+(scaling ? 20:3)){
     var restore:CGDisplayConfigRef?
     let begin=CGBeginDisplayConfiguration(&restore)
     let configure=begin == .success ? CGConfigureDisplayWithDisplayMode(restore,display,original,nil) : begin
