@@ -88,3 +88,12 @@ The [Screen Recording qualification receipt](https://github.com/GoMatiQ-inc/mati
 A real native click after denial adds no screenshot or step. Capture visibly pauses with a warning, the recorder exits before fixture cleanup, and the earlier guide/assets remain unchanged. After restoration both forms remain paused with no recorder. The suite additionally explicitly resumes and appends one real screenshot while preserving the previous step/asset. Original Accessibility and Screen Recording grants, normal app/target/Settings exit and owned listener absence are independently verified.
 
 The operator uses the actual Screen & System Audio Recording page, defers a native relaunch prompt when available, and waits for the permission state to settle. The app does not receive administrator credentials. This qualifies revocation of an existing grant, not first-use setup on a fresh OS profile or every display/sleep combination.
+
+
+## First-use permission setup on 0.1.18
+
+The [first-use receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.18/first-use-permissions-0.1.18.json) covers both forms with fresh app data and supported bundle-scoped OS permission resets. It uses the existing macOS 15.7.7 arm64 Tart user, not a pristine/new macOS account. The other form's grants remain unchanged during each reset, and all original grants are restored afterward.
+
+The actual Screen Recording Deny dialog produces an actionable error with no steps, assets or recorder. After a native Settings grant, the actual Accessibility Deny dialog produces an actionable error and paused capture, again with no steps, assets or recorder. Native grants do not automatically resume recording. Explicit Start captures the first real selected-window screenshot and control label; the same guide remains editable and saves. App, target, Settings and owned listener cleanup are independently verified.
+
+The standalone is freshly installed from the exact released signed/notarized ZIP in an isolated Applications location. The suite starts with no installed tools, refreshes the actual signed marketplace, verifies listing/cancel do not install, then explicitly downloads and installs the released signed 0.1.18 package before the permission workflow. Declared capabilities and installation do not grant OS permissions.
