@@ -59,3 +59,5 @@ test('bounded warning retention keeps older gaps and explicitly reports overflow
 });
 
 test('invalid captured origins fail with safe diagnostics and leave capture unchanged',()=>{const {inspect}=require('node:util'),p=C.begin(P.create()),before=JSON.stringify(p),canary='CONTROLLED-CAPTURE-SECRET';for(const origin of [canary,17,{input:canary},'https://example.com/?token='+canary]){assert.throws(()=>C.append(p,event(p,{origin})),error=>{assert.match(error.message,/HTTP\(S\) origin/);assert.ok(!inspect(error).includes(canary));assert.equal(error.input,undefined);assert.equal(error.cause,undefined);return true;});assert.equal(JSON.stringify(p),before);}});
+
+test('unverified native target is omitted and visibly requires manual review',()=>{const p=C.begin(P.create(),'desktop'),e=event(p,{source:'desktop',application:'Controlled native app',reviewTarget:true});const next=C.append(p,e).project;assert.deepEqual(next.guide.steps[0].annotations,[]);assert.match(next.capture.issues.join(' '),/highlight manually/);assert.throws(()=>C.append(p,{...e,reviewTarget:'yes'}),/review state/);});

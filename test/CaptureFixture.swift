@@ -1,6 +1,21 @@
 import AppKit
 import ApplicationServices
 func output(_ value: [String:Any]) { let data=try! JSONSerialization.data(withJSONObject:value);FileHandle.standardOutput.write(data+Data([10])) }
+var resizeNextClick=false
+final class PaintedButton:NSButton {
+ override func draw(_ dirtyRect:NSRect) {
+  if ProcessInfo.processInfo.environment["GUIDES_TEST_WINDOW_RESIZE"] == "1" { NSColor.magenta.setFill();NSBezierPath(rect:bounds).fill() }
+  else { super.draw(dirtyRect) }
+ }
+ override func mouseDown(with event:NSEvent) {
+  if resizeNextClick,let window=window {
+   resizeNextClick=false
+   for index in 0..<160 { DispatchQueue.main.asyncAfter(deadline:.now()+Double(index)*0.0125){window.setContentSize(NSSize(width:index%2==0 ? 880:560,height:340))} }
+   DispatchQueue.main.asyncAfter(deadline:.now()+2.1){window.setContentSize(NSSize(width:560,height:340));output(["type":"resize-restored"])}
+  }
+  super.mouseDown(with:event)
+ }
+}
 final class Actions: NSObject {
  @objc func pressed(_ sender: NSButton) { output(["type":"clicked","label":sender.title]) }
 }
@@ -11,7 +26,7 @@ var otherWindow: NSWindow?
 let window=NSWindow(contentRect:NSRect(x:220,y:220,width:560,height:340),styleMask:[.titled,.closable],backing:.buffered,defer:false)
 window.isReleasedWhenClosed=false
 window.title="MatiQ Copycat Native Fixture"
-let button=NSButton(title:"Open settings",target:action,action:#selector(Actions.pressed(_:)))
+let button=PaintedButton(title:"Open settings",target:action,action:#selector(Actions.pressed(_:)))
 button.frame=NSRect(x:50,y:220,width:180,height:40)
 window.contentView!.addSubview(button)
 let field=NSTextField(string:"CONTROLLED-SECRET-DO-NOT-LOG")
@@ -32,6 +47,7 @@ FileHandle.standardInput.readabilityHandler={ handle in
  let command=String(data:data,encoding:.utf8) ?? ""
  DispatchQueue.main.async {
   if data.isEmpty||command.contains("quit")||command.contains("stop"){ app.terminate(nil) }
+  else if command.contains("resize-next"){resizeNextClick=true;output(["type":"resize-armed"])}
   else if command.contains("display-change"){
    let display=CGMainDisplayID()
    guard let original=CGDisplayCopyDisplayMode(display),
