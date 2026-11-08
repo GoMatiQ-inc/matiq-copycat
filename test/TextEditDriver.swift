@@ -28,6 +28,7 @@ func bounds(_ element: AXUIElement) -> CGRect? {
 }
 let app=NSApplication.shared
 app.setActivationPolicy(.accessory)
+if CommandLine.arguments.contains("--request") && !CGPreflightScreenCaptureAccess() { _=CGRequestScreenCaptureAccess() }
 let access=AXIsProcessTrusted(),screen=CGPreflightScreenCaptureAccess()
 if CommandLine.arguments.contains("--probe") {
  output(["accessibility":access,"screen":screen]);exit(access && screen ? 0 : 1)
