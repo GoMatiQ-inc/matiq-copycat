@@ -32,6 +32,31 @@ FileHandle.standardInput.readabilityHandler={ handle in
  let command=String(data:data,encoding:.utf8) ?? ""
  DispatchQueue.main.async {
   if data.isEmpty||command.contains("quit")||command.contains("stop"){ app.terminate(nil) }
+  else if command.contains("display-change"){
+   let display=CGMainDisplayID()
+   guard let original=CGDisplayCopyDisplayMode(display),
+         let modes=CGDisplayCopyAllDisplayModes(display,nil) as? [CGDisplayMode],
+         let changed=modes.first(where:{$0.width>=1600 && $0.ioDisplayModeID != original.ioDisplayModeID}) else {
+    output(["type":"display-changed","error":"No alternate actual display mode is available."]);return
+   }
+   var configuration:CGDisplayConfigRef?
+   guard CGBeginDisplayConfiguration(&configuration) == .success,
+         CGConfigureDisplayWithDisplayMode(configuration,display,changed,nil) == .success else {
+    if let configuration=configuration { CGCancelDisplayConfiguration(configuration) }
+    output(["type":"display-changed","error":"The actual display configuration could not begin."]);return
+   }
+   let result=CGCompleteDisplayConfiguration(configuration,.forAppOnly)
+   let actual=CGDisplayCopyDisplayMode(display)
+   output(["type":"display-changed","result":result.rawValue,"before":Int(original.ioDisplayModeID),"after":Int(actual?.ioDisplayModeID ?? 0),"beforeSize":[original.width,original.height],"afterSize":[actual?.width ?? 0,actual?.height ?? 0]])
+   DispatchQueue.main.asyncAfter(deadline:.now()+3){
+    var restore:CGDisplayConfigRef?
+    let begin=CGBeginDisplayConfiguration(&restore)
+    let configure=begin == .success ? CGConfigureDisplayWithDisplayMode(restore,display,original,nil) : begin
+    let restored=configure == .success ? CGCompleteDisplayConfiguration(restore,.forAppOnly) : configure
+    if configure != .success,let restore=restore { CGCancelDisplayConfiguration(restore) }
+    output(["type":"display-restored","result":restored.rawValue,"mode":Int(CGDisplayCopyDisplayMode(display)?.ioDisplayModeID ?? 0)])
+   }
+  }
   else if command.contains("geometry"){output(["type":"geometry","button":NSStringFromRect(screen(button.frame)),"window":window.windowNumber])}
   else if command.contains("other"){
    otherWindow=NSWindow(contentRect:NSRect(x:240,y:350,width:350,height:200),styleMask:[.titled],backing:.buffered,defer:false)
