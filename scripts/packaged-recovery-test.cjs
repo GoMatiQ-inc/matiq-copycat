@@ -5,7 +5,7 @@ const {launchPackagedGuides}=require('./packaged-browser-app.cjs');
 async function main(){
  require('./native-test-isolation.cjs').assertNativeTestIsolation();assert.ok(process.env.RUNNER_TEMP,'Set the retained proof directory before packaged recovery qualification.');
  const root=path.join(__dirname,'..'),temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-recovery-'))),receipts=[];
- let app=null,owned=[],page,child=null,proof;
+ let app=null,owned=[],page,child=null,proof,portable=process.env.GUIDES_MIXED_PROJECT;assert.ok(portable,'Supply the retained real captured mixed project for portable recovery qualification.');
  const watchdog=setTimeout(()=>{if(child?.exitCode===null)child.kill('SIGTERM');},240000);
  async function open(suite,profile){const launched=await launchPackagedGuides({root,profile,suite});app=launched.app;page=launched.editor;child=app.process();owned=captureTree(capture(child));return launched;}
  async function crash(){
@@ -18,11 +18,11 @@ async function main(){
   await page.getByRole('button',{name:/Crash recovery fixture/}).click();await page.waitForFunction(note=>document.querySelector('#notes').value===note,note);assert.equal(await page.locator('#save-state').innerText(),'Unsaved');
  }
  try{
-  for(const suite of [false,true]){
+  for(const suite of [true,false]){
    const profile=path.join(temporary,suite?'suite':'standalone'),launched=await open(suite,profile);
-   await page.getByRole('button',{name:'New guide',exact:true}).click();await page.getByLabel('Guide title',{exact:true}).fill('Crash recovery fixture');await page.getByRole('button',{name:'Add manual step',exact:true}).click();await page.getByLabel('Instruction',{exact:true}).fill('Review the controlled recovery fixture');
-   const image=path.join(temporary,(suite?'suite':'standalone')+'-fixture.png'),pixels=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=160;c.height=100;const x=c.getContext('2d');x.fillStyle='#eeddaa';x.fillRect(0,0,160,100);x.fillStyle='#222';x.fillText('Controlled recovery fixture',8,50);return c.toDataURL('image/png').split(',')[1];});await fs.writeFile(image,Buffer.from(pixels,'base64'));await app.evaluate(({dialog},image)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[image]});},image);await page.getByRole('button',{name:'Replace screenshot',exact:true}).click();await save();
-   const file=path.join(launched.library,(await fs.readdir(launched.library)).find(name=>name.endsWith('.mqguide'))),original=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(Object.keys(original.assets).length,1);
+   const incoming=JSON.parse(await fs.readFile(portable,'utf8'));assert.ok(incoming.guide.steps.some(step=>step.kind==='browser')&&incoming.guide.steps.some(step=>step.kind==='desktop'));assert.ok(Object.keys(incoming.assets).length>0);
+   await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},portable);await page.getByRole('button',{name:'Import editable project',exact:true}).click();await page.locator('#editor').waitFor({state:'visible'});await page.getByLabel('Guide title',{exact:true}).fill('Crash recovery fixture');await save();
+   const file=path.join(launched.library,incoming.guide.id+'.mqguide'),original=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(original.guide.id,incoming.guide.id);assert.deepEqual(original.guide.steps,incoming.guide.steps);assert.deepEqual(original.assets,incoming.assets);
    await page.getByLabel('Notes',{exact:true}).fill('Recovered interrupted edit');
    await app.evaluate(({app,dialog})=>{global.guidesRecoveryCloseError='';dialog.showErrorBox=(_title,text)=>{global.guidesRecoveryCloseError=text;};app.quit();});
    for(let i=0;i<100;i++){if(await app.evaluate(()=>global.guidesRecoveryCloseError))break;await new Promise(resolve=>setTimeout(resolve,25));}
@@ -36,8 +36,9 @@ async function main(){
    assert.equal(await app.evaluate(()=>global.guidesRecoveryRenameHeld),true,'Hold only the owned project rename after its real write and fsync.');assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),saved);assert.equal(JSON.parse(await fs.readFile(file+'.pending','utf8')).guide.steps[0].notes,'Recovered durable pending save');
    await crash();assert.deepEqual(JSON.parse(await fs.readFile(file,'utf8')),saved,'Termination before rename must preserve the previous completed save.');
    await recover(suite,profile,'Recovered durable pending save');await save();const recovered=JSON.parse(await fs.readFile(file,'utf8'));assert.equal(recovered.guide.id,original.guide.id);assert.equal(recovered.guide.steps[0].id,original.guide.steps[0].id);assert.deepEqual(recovered.assets,original.assets);await assert.rejects(fs.access(file+'.pending'),{code:'ENOENT'});
+   const exported=path.join(temporary,(suite?'suite':'standalone')+'-recovered.mqguide');await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},exported);await page.getByLabel('Export format',{exact:true}).selectOption('editable');await page.getByRole('button',{name:'Export saved guide',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#message').textContent.startsWith('Export saved.'));assert.deepEqual(JSON.parse(await fs.readFile(exported,'utf8')),recovered);portable=exported;
    const exited=once(child,'exit');owned=captureTree(capture(child));await app.evaluate(({app})=>{setTimeout(()=>app.quit(),50);});await exited;app=null;child=null;await cleanupDesktop({owned});owned=[];
-   receipts.push({form:suite?'suite':'standalone',tool:launched.candidate.version,toolSource:launched.candidate.commit,checks:['unsaved close visibly refused and draft flushed','real app termination and stale ownership recovery','explicit draft recovery restores stable guide/step identities','controlled interruption after real pending write/fsync preserves completed save','explicit pending-save recovery and normal save remove pending files','normal final exit and independent owned cleanup']});
+   receipts.push({form:suite?'suite':'standalone',tool:launched.candidate.version,toolSource:launched.candidate.commit,checks:['actual captured standalone mixed project imports into suite, then recovered suite export imports into standalone with stable ordered steps/assets','unsaved close visibly refused and draft flushed','real app termination and stale ownership recovery','explicit draft recovery restores stable guide/step identities','controlled interruption after real pending write/fsync preserves completed save','explicit pending-save recovery and normal save remove pending files','normal final exit and independent owned cleanup']});
   }
   proof={passed:true,scope:'Real signed packaged crash recovery; only the final owned-file rename is held as a controlled failure fixture.',harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),receipts,cleanupVerified:true};
  }finally{await cleanupDesktop({app,owned,temporary,watchdog});}

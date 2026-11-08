@@ -66,6 +66,7 @@ jobs:
         env:
           GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
           GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
+          GUIDES_MIXED_PROJECT: ${{ vars.GUIDES_MIXED_PROJECT }}
           GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
         run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 10 -- node scripts/packaged-vm-project.cjs --browser-matrix
       - if: always()
