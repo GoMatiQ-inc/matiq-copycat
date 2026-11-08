@@ -1,0 +1,104 @@
+name: Copycat core checks and isolated macOS qualification
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'native/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package*.json'
+      - 'matiq-tool.json'
+      - '.github/workflows/isolated-macos.yml'
+permissions:
+  contents: read
+concurrency:
+  group: guides-isolated-macos-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  public-core:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run tool:validate
+  sdk-desktop:
+    if: github.event.repository.private && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on:
+      group: MatiQ Mac CI
+      labels: [self-hosted, macOS, ARM64, matiq-mac-mini]
+    timeout-minutes: 45
+    env:
+      GUIDES_NATIVE_TEST_VM: tart
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      GUIDES_TEST_SCOPE_TRANSITIONS: '1'
+      GUIDES_TEST_OFFLINE: '1'
+      GUIDES_RUN_PACKAGED_QUALIFICATION: ${{ vars.GUIDES_RUN_PACKAGED_QUALIFICATION }}
+      GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify VM isolation before installing or opening anything
+        run: node -e "require('./scripts/native-test-isolation.cjs').assertNativeTestIsolation()"
+      - name: Fast feature regression in the guest
+        env:
+          GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
+        shell: bash
+        run: |
+          /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 6 -- /bin/bash -euo pipefail <<'SCRIPT'
+          npm ci --no-audit --no-fund
+          npm test
+          if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && "$GUIDES_BROWSER_DIAGNOSTIC" == *-mixed ]]; then
+            node <<'NODE'
+          const fs=require('node:fs/promises'),path=require('node:path');
+          (async()=>{const temporary=await fs.mkdtemp(path.join(process.env.RUNNER_TEMP,'guides-textedit-preflight-'));try{const session=await require('./scripts/textedit-workflow.cjs').openTextEdit({root:process.cwd(),temporary});try{console.log('PASS: CI-context controlled TextEdit document and on-screen window are accessible.');}finally{await session.close();}}finally{await fs.rm(temporary,{recursive:true});}})().catch(error=>{console.error(error);process.exitCode=1;});
+          NODE
+          fi
+          if [[ "$GUIDES_RUN_PACKAGED_QUALIFICATION" == "true" && -z "$GUIDES_BROWSER_DIAGNOSTIC" ]]; then
+            node scripts/electron-vm-preflight.cjs
+            npm run test:desktop
+            export GUIDES_DESKTOP_REGRESSION=1
+          fi
+          npm run tool:validate
+          node <<'NODE'
+          const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
+          const proof={passed:true,scope:process.env.GUIDES_DESKTOP_REGRESSION==='1'?'SDK development desktop regression; packaged capture qualification is separate':'Fast feature regression: core tests and SDK manifest validation only; no packaged or desktop acceptance claim',desktopRegression:process.env.GUIDES_DESKTOP_REGRESSION==='1',sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),node:process.version,arch:process.arch,macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,electron:require('electron/package.json').version,cleanup:process.env.GUIDES_DESKTOP_REGRESSION==='1'?'Desktop fixture independently verified owned process/listener absence.':'No desktop fixture launched by the fast regression step.'};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'matiq-guides-isolated-sdk-proof.json'),JSON.stringify(proof,null,2)+'\n');
+          NODE
+          SCRIPT
+      - name: Signed packaged qualification in the guest
+        if: env.GUIDES_RUN_PACKAGED_QUALIFICATION == 'true'
+        env:
+          GUIDES_SWIFT_MODULE_CACHE: ${{ runner.temp }}/guides-swift-modules
+          GUIDES_QUALIFICATION_INPUT: ${{ vars.GUIDES_QUALIFICATION_INPUT }}
+          GUIDES_MIXED_PROJECT: ${{ vars.GUIDES_MIXED_PROJECT }}
+          GUIDES_BROWSER_DIAGNOSTIC: ${{ vars.GUIDES_BROWSER_DIAGNOSTIC }}
+        run: /usr/bin/python3 "$HOME/ops/storage_guard.py" run --reserve-gib 10 -- node scripts/packaged-vm-project.cjs --browser-matrix
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: isolated-macos-proof
+          path: |
+            ${{ runner.temp }}/matiq-guides-*-proof.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retire the successful job dependency tree
+        if: success()
+        shell: bash
+        run: |
+          test -d node_modules
+          test ! -L node_modules
+          rm -rf -- node_modules
