@@ -228,7 +228,7 @@ async function main(){
  finally{
   const errors=[];let safe=true;
   async function clean(label,operation){try{await operation();}catch(error){safe=false;console.error(label+': '+error.message);errors.push(error);}}
-  if(child?.exitCode===null)browserOwned=captureTree(capture(child));
+  if(child?.exitCode===null)browserOwned=Array.from(new Map([...browserOwned,...captureTree(capture(child))].map(row=>[row.pid,row])).values());
   if(appChild?.exitCode===null)owned=captureTree(capture(appChild));
   await clean('Identify owned browser crash helpers',async()=>{try{ownCrashHelpers();browserOwned.push(...browserCrashOwned);}catch(error){safe=false;throw error;}});
   await clean('Debugger transport cleanup',async()=>{if(debuggerSocket){debuggerSocket.close();}});
