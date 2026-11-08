@@ -1,7 +1,7 @@
 {
-  "name": "matiq-guides",
-  "productName": "MatiQ Guides",
-  "version": "0.1.11",
+  "name": "matiq-copycat",
+  "productName": "MatiQ Copycat",
+  "version": "0.1.12",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -43,7 +43,7 @@
   },
   "build": {
     "appId": "com.matiq.guides",
-    "productName": "MatiQ Guides",
+    "productName": "MatiQ Copycat",
     "icon": "node_modules/@matiq-solutions/shell/assets/app-icon.png",
     "mac": {
       "icon": "node_modules/@matiq-solutions/shell/assets/app-icon.icns",
@@ -73,7 +73,7 @@
       {
         "provider": "github",
         "owner": "GoMatiQ-inc",
-        "repo": "matiq-guides"
+        "repo": "matiq-copycat"
       }
     ],
     "extraResources": [

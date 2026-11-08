@@ -23,9 +23,9 @@ async function main(){
   assert.equal(run('/usr/libexec/PlistBuddy',['-c','Print :CFBundleIdentifier',plist]).trim(),'com.matiq.guides');
   assert.equal(run('/usr/libexec/PlistBuddy',['-c','Print :CFBundleShortVersionString',plist]).trim(),version);
  }
- const bundle=path.join(output,'mac-arm64/MatiQ Guides.app');await application(bundle);
- const zip='MatiQ-Guides-'+version+'-mac-arm64.zip',dmg='MatiQ-Guides-'+version+'-mac-arm64.dmg',stage=await fs.mkdtemp(path.join(os.tmpdir(),'guides-verify-zip-'));
- try{run('/usr/bin/ditto',['-x','-k',path.join(output,zip),stage]);await application(path.join(stage,'MatiQ Guides.app'));}finally{await fs.rm(stage,{recursive:true,force:true});}
+ const bundle=path.join(output,'mac-arm64/MatiQ Copycat.app');await application(bundle);
+ const zip='MatiQ-Copycat-'+version+'-mac-arm64.zip',dmg='MatiQ-Copycat-'+version+'-mac-arm64.dmg',stage=await fs.mkdtemp(path.join(os.tmpdir(),'guides-verify-zip-'));
+ try{run('/usr/bin/ditto',['-x','-k',path.join(output,zip),stage]);await application(path.join(stage,'MatiQ Copycat.app'));}finally{await fs.rm(stage,{recursive:true,force:true});}
  run('/usr/bin/codesign',['--verify','--strict',path.join(output,dmg)]);
  run('/usr/bin/xcrun',['stapler','validate','-q',path.join(output,dmg)]);
  run('/usr/sbin/spctl',['--assess','--type','open','--context','context:primary-signature','--verbose=2',path.join(output,dmg)]);

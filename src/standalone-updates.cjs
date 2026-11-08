@@ -4,7 +4,7 @@ const SDK='0.1.3',RUNTIME='electron-45.2.3';
 function releaseSummary(info){
  if(!info||info.toolId!=='com.matiq.guides'||info.sdkVersion!==SDK||info.runtime!==RUNTIME||info.dataVersion!==1)throw Error('This update needs a different SDK, runtime or project format. Keep your saved work and wait for a qualified compatible release.');
  if(typeof info.version!=='string'||!/^\d+\.\d+\.\d+$/.test(info.version)||info.version.length>60)throw Error('The update version is invalid. Retry after the release metadata is corrected.');
- const candidates=Array.isArray(info.files)?info.files.filter(f=>f&&f.url==='MatiQ-Guides-'+info.version+'-mac-arm64.zip'):[],file=candidates.length===1?candidates[0]:null;
+ const candidates=Array.isArray(info.files)?info.files.filter(f=>f&&f.url==='MatiQ-Copycat-'+info.version+'-mac-arm64.zip'):[],file=candidates.length===1?candidates[0]:null;
  if(!file||!Number.isSafeInteger(file.size)||file.size<1||file.size>1024**3||typeof file.sha512!=='string'||!/^[A-Za-z0-9+/]{86}==$/.test(file.sha512))throw Error('The update is missing a valid arm64 ZIP, size or integrity hash. Retry after the release metadata is corrected.');
  return {version:info.version,bytes:file.size};
 }
@@ -62,7 +62,7 @@ function create(host){
  }
  function willQuit(event){
   if(!restart)return;event.preventDefault();app.removeListener('will-quit',willQuit);
-  setImmediate(()=>{const failed=()=>{native.removeListener('error',failed);dialog.showErrorBox('Update could not restart','The guide workspace closed safely, but macOS did not restart the update. Reopen MatiQ Guides to continue.');setImmediate(()=>app.quit());};native.once('error',failed);app.once('quit',()=>native.removeListener('error',failed));try{native.quitAndInstall();}catch{failed();}});
+  setImmediate(()=>{const failed=()=>{native.removeListener('error',failed);dialog.showErrorBox('Update could not restart','The guide workspace closed safely, but macOS did not restart the update. Reopen MatiQ Copycat to continue.');setImmediate(()=>app.quit());};native.once('error',failed);app.once('quit',()=>native.removeListener('error',failed));try{native.quitAndInstall();}catch{failed();}});
  }
  app.on('will-quit',willQuit);
  async function command(action){

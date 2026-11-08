@@ -42,7 +42,7 @@ try:
  # Inspect only the fixture identity from the list; never log user-window titles.
  listing=json.loads(subprocess.check_output([binary,'list'],timeout=10))
  chosen=[w for w in listing['windows'] if w['id']==ready['window']]
- assert len(chosen)==1 and chosen[0]['title']=='MatiQ Guides Native Fixture'
+ assert len(chosen)==1 and chosen[0]['title']=='MatiQ Copycat Native Fixture'
  wrong=subprocess.run([binary,'record',str(ready['window']),str(ready['pid']+1)],capture_output=True,timeout=10)
  assert wrong.returncode!=0 and json.loads(wrong.stdout)['type']=='issue','A window identity mismatch must fail before hooks start.'
  capture,steps=launch([binary,'record',ready['window'],ready['pid']]);next_type(steps,'ready')

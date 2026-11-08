@@ -3,7 +3,7 @@ const yaml=require('js-yaml');
 const {buildBlockMap}=require('app-builder-lib/out/targets/blockmap/blockmap');
 const run=promisify(execFile);
 module.exports=async function notarizeContainer(){
- const version=require('../package.json').version,folder=path.join(__dirname,'../dist'),name='MatiQ-Guides-'+version+'-mac-arm64.dmg',file=path.join(folder,name);
+ const version=require('../package.json').version,folder=path.join(__dirname,'../dist'),name='MatiQ-Copycat-'+version+'-mac-arm64.dmg',file=path.join(folder,name);
  if(!process.env.APPLE_KEYCHAIN_PROFILE||!process.env.APPLE_KEYCHAIN)throw Error('Notarize the disk image inside the qualified SDK credential profile.');
  const result=await run('/usr/bin/xcrun',['notarytool','submit',file,'--keychain-profile',process.env.APPLE_KEYCHAIN_PROFILE,'--keychain',process.env.APPLE_KEYCHAIN,'--wait','--output-format','json'],{timeout:1200000,maxBuffer:256*1024});
  const ticket=JSON.parse(result.stdout);

@@ -10,7 +10,7 @@ let action=Actions()
 var otherWindow: NSWindow?
 let window=NSWindow(contentRect:NSRect(x:220,y:220,width:560,height:340),styleMask:[.titled,.closable],backing:.buffered,defer:false)
 window.isReleasedWhenClosed=false
-window.title="MatiQ Guides Native Fixture"
+window.title="MatiQ Copycat Native Fixture"
 let button=NSButton(title:"Open settings",target:action,action:#selector(Actions.pressed(_:)))
 button.frame=NSRect(x:50,y:220,width:180,height:40)
 window.contentView!.addSubview(button)

@@ -46,7 +46,7 @@ function image(bytes) {
   return {mediaType:png?'image/png':'image/jpeg',data:bytes.toString('base64')};
 }
 function validate(value) {
-  if (!value || value.format !== 'matiq-guides' || value.version !== 1) throw Error('Unsupported project format. Use a MatiQ Guides version 1 project.');
+  if (!value || value.format !== 'matiq-guides' || value.version !== 1) throw Error('Unsupported project format. Use a MatiQ Copycat version 1 project.');
   if (!value.assets || typeof value.assets !== 'object' || Array.isArray(value.assets) || Object.keys(value.assets).length > 1000) throw Error('Project contains an invalid asset inventory.');
   if(Object.values(value.assets).reduce((total,asset)=>total+(typeof asset?.data==='string'?asset.data.length:0),0)>MAX_BYTES)throw Error('Embedded screenshots exceed the 128 MiB project limit. Split the guide before continuing.');
   const assets = {};

@@ -18,7 +18,7 @@ async function launchPackagedGuides({root,profile,openWorkspace=true,suite=!!pro
   if(process.env.GUIDES_TEST_OFFLINE==='1')await app.evaluate(({session})=>{for(const partition of [session.defaultSession,session.fromPartition('persist:solutions-com.matiq.guides')])partition.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_request,done)=>done({cancel:true}));});
   let editor=await app.firstWindow();editor.setDefaultTimeout(12000);await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
   if(suite&&openWorkspace){
-   await editor.locator('article').filter({has:editor.getByRole('heading',{name:'MatiQ Guides',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();let workspace;
+   await editor.locator('article').filter({has:editor.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();let workspace;
    for(let i=0;i<200;i++){workspace=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(workspace)break;await new Promise(resolve=>setTimeout(resolve,50));}
    assert.ok(workspace,'The signed suite must load the installed Guides workspace.');editor=workspace;editor.setDefaultTimeout(12000);
   }

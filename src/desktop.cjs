@@ -6,7 +6,7 @@ async function executable(host){
   const file=path.join(base,'native/guides-capture');
   try{const stat=await fs.lstat(file);if(stat.isFile()&&!stat.isSymbolicLink()){await fs.access(file,fs.constants.X_OK);return file;}}catch(error){if(error.code!=='ENOENT')throw error;}
  }
- throw Error('The native capture helper is missing. Reinstall a verified complete MatiQ Guides package.');
+ throw Error('The native capture helper is missing. Reinstall a verified complete MatiQ Copycat package.');
 }
 function launch(program,args,onMessage){
  const child=spawn(program,args,{stdio:['pipe','pipe','ignore']});let tail=Buffer.alloc(0),failure=null;

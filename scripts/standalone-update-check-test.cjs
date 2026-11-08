@@ -7,7 +7,7 @@ async function main(){
  const watchdog=setTimeout(()=>{timedOut=true;if(child?.exitCode===null&&child.signalCode===null)child.kill('SIGTERM');server?.closeAllConnections();},100000);
  try{
   const candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8')),parts=candidate.version.split('.').map(Number),next=[parts[0],parts[1],parts[2]+1].join('.');
-  const metadata={version:next,toolId:'com.matiq.guides',sdkVersion:'0.1.3',runtime:'electron-45.2.3',dataVersion:1,files:[{url:'MatiQ-Guides-'+next+'-mac-arm64.zip',size:120000000,sha512:Buffer.alloc(64).toString('base64')}]};
+  const metadata={version:next,toolId:'com.matiq.guides',sdkVersion:'0.1.3',runtime:'electron-45.2.3',dataVersion:1,files:[{url:'MatiQ-Copycat-'+next+'-mac-arm64.zip',size:120000000,sha512:Buffer.alloc(64).toString('base64')}]};
   function reply(response){if(mode==='failure'){response.writeHead(503);response.end('CONTROLLED-SECRET-UPDATE-BODY');return;}response.setHeader('Content-Type','text/yaml');response.end(require('js-yaml').dump({...metadata,...(mode==='incompatible'?{sdkVersion:'9.9.9'}:{})}));}
   server=http.createServer((request,response)=>{if(request.method!=='GET'||'x-user-staging-id' in request.headers){trafficViolation='The update fixture received a non-GET request or rollout identifier.';response.writeHead(400);response.end();return;}traffic.push({path:request.url.split('?')[0],headers:Object.keys(request.headers)});if(mode==='hold')held.push(response);else reply(response);});
   server.timeout=10000;await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));port=server.address().port;

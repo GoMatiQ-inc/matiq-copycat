@@ -47,7 +47,7 @@ async function main(){
   forms.push({form:suite?'suite':'standalone',version:actual.version,dataDir:suite?'profile/tools/com.matiq.guides/guides':'profile/guides'});
   let page=await app.firstWindow();page.setDefaultTimeout(15000);
   if(suite){
-   await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Guides',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
+   await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
    for(let i=0;i<200;i++){const found=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(found){page=found;break;}await new Promise(r=>setTimeout(r,50));}
    assert.ok(page.url().includes(record.directory));
    await app.evaluate(({session})=>{session.fromPartition('persist:solutions-com.matiq.guides').webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_d,done)=>done({cancel:true}));});

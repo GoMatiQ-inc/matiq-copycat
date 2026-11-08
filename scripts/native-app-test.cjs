@@ -29,7 +29,7 @@ async function main(){
   // Application approval is controlled here; OS permissions and actual capture mechanisms are real.
   await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
   if(!suite)return page;
-  await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Guides',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
+  await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
   let tool;for(let i=0;i<200;i++){tool=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(tool)break;await new Promise(resolve=>setTimeout(resolve,50));}
   if(!tool){console.error('Suite workspace diagnostic:',JSON.stringify({expectedDirectory:record.directory,pages:app.context().pages().map(p=>p.url()),contents:await app.evaluate(({webContents})=>webContents.getAllWebContents().map(c=>({type:c.getType(),url:c.getURL()}))),shell:await page.locator('body').innerText()}));}assert.ok(tool,'The actual suite must open the installed isolated Guides workspace.');tool.setDefaultTimeout(15000);return tool;
  }
