@@ -27,3 +27,5 @@ Keyboard button activation was reproduced independently in the owned browser fix
 Document-transition readiness, reply deadlines and cancellation checks were implemented from failures in MatiQ's own streamed-page browser fixture. The fixture uses real browser navigation and screenshot APIs, with controlled HTTP response timing; it does not copy or adapt an external capture implementation.
 
 Read-only follow-up: Mimik commit `230860bf07d8317436c0508b221373a78cffcc83`, public README, capture-file inventory and `apps/desktop/src/renderer/hooks/use-capture-permissions.ts`, consulted for permission request/grant/restart behavior. MatiQ’s native permission fix and capture implementation already existed before this inspection. No reference code, algorithms, structure, tests or assets were copied or adapted.
+
+On November8,2026 the public Mimik README was reviewed again for functional context. The painted native-button resize experiment and pending-screenshot geometry checks come from MatiQ's own AppKit fixture, observed packaged failures and Apple CoreGraphics declarations. No competitor implementation source was used for this correction.

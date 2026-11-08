@@ -180,7 +180,25 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
             config.ignoreShadowsSingleWindow = true
             config.includeChildWindows = false
             config.showsCursor = false
+            let frame = window.frame
+            let geometryChanged = {
+                guard let rows = CGWindowListCopyWindowInfo(.optionIncludingWindow, self.id) as? [[String: Any]],
+                      let bounds = rows.first?[kCGWindowBounds as String] as? [String: Any],
+                      let current = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return true }
+                return current != frame
+            }
+            let geometryWarning = "The selected window moved or resized while its screenshot was pending. Capture stopped; review the last action and explicitly resume."
+            guard !geometryChanged() else { stop(geometryWarning); return }
+            let geometryTimer = Timer(timeInterval: 0.01, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self = self, !self.stopped else { return }
+                    if geometryChanged() { self.stop(geometryWarning) }
+                }
+            }
+            RunLoop.main.add(geometryTimer, forMode: .common)
+            defer { geometryTimer.invalidate() }
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+            guard !geometryChanged() else { stop(geometryWarning); return }
             guard !stopped else { return }
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
                 stop("Focus changed before the screenshot finished. Review the last action, then resume."); return
