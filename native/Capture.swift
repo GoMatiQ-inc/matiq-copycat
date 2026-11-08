@@ -205,7 +205,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
                    let recorder = Unmanaged<Recorder>.fromOpaque(pointer).takeUnretainedValue()
                    MainActor.assumeIsolated { recorder.stop(geometryWarning) }
                }, &geometryObserver) == .success, let observer = geometryObserver {
-                let names = [kAXWindowMovedNotification, kAXMovedNotification, kAXWindowResizedNotification, kAXResizedNotification]
+                let names: [CFString] = [kAXWindowMovedNotification as CFString, kAXMovedNotification as CFString, kAXWindowResizedNotification as CFString, kAXResizedNotification as CFString]
                 var supported: [Bool] = []
                 for name in names {
                     let success = AXObserverAddNotification(observer, observedWindow, name, Unmanaged.passUnretained(self).toOpaque()) == .success
