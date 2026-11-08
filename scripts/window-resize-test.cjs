@@ -20,7 +20,7 @@ async function main(){
     if(right<left)throw Error('The actual screenshot has no painted target.');return {x:left/size.width,y:top/size.height,width:(right-left+1)/size.width,height:(bottom-top+1)/size.height};
    },asset);const delta=Math.max(...['x','y','width','height'].map(k=>Math.abs(paint[k]-box[k])));return {paint,box,delta};
   }
-  await click();await editor.waitForFunction(()=>document.querySelectorAll('#steps li').length===1);const baseline=await measurement(await project());assert.ok(baseline.delta<.02,'Calibrate the independent painted-target oracle on a stable actual screenshot.');const results=[];
+  await click();await editor.waitForFunction(()=>document.querySelectorAll('#steps li').length===1);const baselineProject=await project(),baseline=await measurement(baselineProject);await fs.mkdir(path.join(root,'.validation'),{recursive:true});await fs.writeFile(path.join(root,'.validation/window-resize-baseline.json'),JSON.stringify(baseline,null,2)+'\n');await fs.writeFile(path.join(root,'.validation/window-resize-baseline.jpg'),Buffer.from(baselineProject.assets[baselineProject.guide.steps[0].asset].data,'base64'));assert.ok(baseline.delta<.02,'Calibrate the independent painted-target oracle on a stable actual screenshot.');const results=[];
   for(let attempt=0;attempt<3;attempt++){
    const before=await project();write('resize-next');await next('resize-armed');await click();
    await editor.waitForFunction(n=>document.querySelector('#capture-status').textContent.includes('capture paused')||document.querySelectorAll('#steps li').length>n,before.guide.steps.length);const p=await project();await next('resize-restored');
