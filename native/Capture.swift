@@ -34,7 +34,7 @@ func text(_ element: AXUIElement, _ key: CFString) -> String {
     guard AXUIElementCopyAttributeValue(element, key, &result) == .success else { return "" }
     return result as? String ?? ""
 }
-func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
+func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout AXUIElement?) -> [String: Any] {
     var found: AXUIElement?
     guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &found) == .success,
           let element = found else { return [:] }
@@ -42,6 +42,12 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
     guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return [:] }
     let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item"]
     let role = text(element, kAXRoleAttribute as CFString)
+    var windowValue: CFTypeRef?
+    if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowValue) == .success,
+       let windowValue = windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() {
+        observedWindow = (windowValue as! AXUIElement)
+    }
+
     // Never read AXValue, selected text, document URLs, or text-field contents.
     var result: [String: Any] = ["control": roles[role] ?? "control"]
     if roles[role] != nil {
@@ -70,6 +76,7 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
         "\(screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] ?? 0):\(NSStringFromRect(screen.frame)):\(screen.backingScaleFactor)"
     }.sorted().joined(separator: ";")
 }
+let geometryWarning = "The selected window moved or resized while its screenshot was pending. Capture stopped; review the last action and explicitly resume."
 @MainActor final class Recorder {
     let id: CGWindowID
     let pid: pid_t
@@ -170,7 +177,8 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
                 return rect.contains(point)
             }
             guard (top?[kCGWindowNumber as String] as? UInt32) == id else { return }
-            let context = target(point, pid: pid, frame: window.frame)
+            var observedWindow: AXUIElement?
+            var context = target(point, pid: pid, frame: window.frame, observedWindow: &observedWindow)
             let filter = SCContentFilter(desktopIndependentWindow: window)
             let config = SCStreamConfiguration()
             let scale = CGFloat(filter.pointPixelScale)
@@ -187,16 +195,38 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect) -> [String: Any] {
                       let current = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return true }
                 return current != frame
             }
-            let geometryWarning = "The selected window moved or resized while its screenshot was pending. Capture stopped; review the last action and explicitly resume."
             guard !geometryChanged() else { stop(geometryWarning); return }
-            let geometryTimer = Timer(timeInterval: 0.01, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self = self, !self.stopped else { return }
-                    if geometryChanged() { self.stop(geometryWarning) }
+            var geometryObserver: AXObserver?
+            var registered: [CFString] = []
+            var geometryMonitored = false
+            if let observedWindow = observedWindow,
+               AXObserverCreate(pid, { _, _, _, pointer in
+                   guard let pointer = pointer else { return }
+                   let recorder = Unmanaged<Recorder>.fromOpaque(pointer).takeUnretainedValue()
+                   MainActor.assumeIsolated { recorder.stop(geometryWarning) }
+               }, &geometryObserver) == .success, let observer = geometryObserver {
+                let names = [kAXWindowMovedNotification, kAXMovedNotification, kAXWindowResizedNotification, kAXResizedNotification]
+                var supported: [Bool] = []
+                for name in names {
+                    let success = AXObserverAddNotification(observer, observedWindow, name, Unmanaged.passUnretained(self).toOpaque()) == .success
+                    supported.append(success)
+                    if success { registered.append(name) }
+                }
+                geometryMonitored = (supported[0] || supported[1]) && (supported[2] || supported[3])
+                CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+            }
+            defer {
+                if let observer = geometryObserver {
+                    CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+                    if let observedWindow = observedWindow {
+                        for name in registered { AXObserverRemoveNotification(observer, observedWindow, name) }
+                    }
                 }
             }
-            RunLoop.main.add(geometryTimer, forMode: .common)
-            defer { geometryTimer.invalidate() }
+            if !geometryMonitored {
+                context.removeValue(forKey: "target")
+                context["reviewTarget"] = true
+            }
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             guard !geometryChanged() else { stop(geometryWarning); return }
             guard !stopped else { return }

@@ -56,7 +56,10 @@ function append(project,event){
  if(!event.image||typeof event.image.data!=='string'||event.image.data.length>950000)throw Error('Capture screenshot is missing or exceeds the bridge limit. Reduce its size and retry.');
  const bytes=Buffer.from(event.image.data,'base64');if(bytes.toString('base64')!==event.image.data)throw Error('Capture screenshot encoding is invalid.');
  s.asset=P.addImage(next,bytes);if(next.assets[s.asset].mediaType!==event.image.mediaType)throw Error('Capture image type does not match its bytes.');
- if(event.target)s.annotations=[{type:'box',...P.rect(event.target),text:''}];
+ if(event.source==='desktop'&&event.reviewTarget!==undefined&&typeof event.reviewTarget!=='boolean')throw Error('Desktop target review state is invalid. Stop and retry native capture.');
+ const reviewTarget=event.source==='desktop'&&event.reviewTarget===true;
+ if(event.target&&!reviewTarget)s.annotations=[{type:'box',...P.rect(event.target),text:''}];
+ if(reviewTarget)addIssue(next.capture,'The desktop target position could not be monitored reliably. Review this screenshot and add its highlight manually.');
  next.guide.steps.push(s);next.capture.receipts.push(s.id);return {project:P.validate(next),duplicate:false};
 }
 function warn(project,reason){if(typeof reason!=='string'||!reason||reason.length>1000)throw Error('Capture warning must contain up to 1,000 characters.');const next=P.clone(project);if(!next.capture||!['recording','paused'].includes(next.capture.phase))throw Error('No active capture is available for this warning.');addIssue(next.capture,reason);return P.validate(next);}
