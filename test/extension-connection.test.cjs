@@ -22,3 +22,19 @@ test('invalid RPC acknowledgements close the port and retain pending work',{time
 test('completed capture does not require a retired page to reconnect during worker startup',{timeout:2000},async t=>{const f=fixture(t,{phase:'stopped',scope:{tabId:17}});await f.run('initialized');assert.deepEqual(f.commands,[]);assert.equal(f.run('state.phase'),'stopped');assert.equal(f.run('state.error'),'');});
 
 test('an unresponsive page cannot hold capture-control delivery indefinitely',{timeout:4000},async t=>{const f=fixture(t);await f.run('initialized');f.run("state.scope={tabId:17};chrome.tabs.sendMessage=()=>new Promise(()=>{})");const started=Date.now();await assert.rejects(f.run("tell('context')"),/selected page did not answer capture control within two seconds/);assert.ok(Date.now()-started<3000,'Report a bounded page interruption instead of leaving the capture queue blocked.');});
+
+
+test('navigation between successful screenshot context reads uses a stable navigation step',{timeout:2000},async t=>{
+ const f=fixture(t);await f.run('initialized');
+ await f.run(`active=true;state.scope={};state.capture={id:'session',scope:'scope'};state.outbox=[];baseline=null;
+ const oldContext={doc:'old',navigation:'old-nav',revision:1,origin:'https://example.com',viewport:{width:100,height:100},target:{x:0,y:0,width:.2,height:.2}};
+ let reads=0;waitScreenshot=async()=>{};screenshot=async()=> 'unreliable-old-image';
+ tell=async()=>++reads===1?oldContext:{...oldContext,doc:'new',navigation:'new-nav'};
+ navigationSnapshot=async()=>({image:'verified-new-image',context:{...oldContext,doc:'new',navigation:'new-nav'}});
+ flush=async()=>{};rpc=async()=>({});
+ append({id:'stable-event',at:1,action:'click',control:'link',label:'Next',navigationExpected:true},oldContext);`);
+ assert.equal(f.run('state.outbox.length'),1);assert.equal(f.run('state.outbox[0].id'),'stable-event');
+ assert.equal(f.run('state.outbox[0].image'),'verified-new-image');assert.equal(f.run('state.outbox[0].action'),'navigate');assert.equal(f.run('state.outbox[0].target'),null);
+ assert.match(f.run('state.warnings.at(-1)'),/Navigation completed/);
+ await assert.rejects(f.run(`state.outbox=[];reads=0;tell=async()=>++reads===1?oldContext:{...oldContext,revision:2};append({id:'unstable-event',at:2,action:'click',control:'button',label:'Settings'},oldContext);`),/page changed/);assert.equal(f.run('state.outbox.length'),0,'Same-document instability must remain a visible gap.');
+});

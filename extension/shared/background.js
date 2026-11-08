@@ -52,7 +52,7 @@ async function compress(data){if(data.length<=950000)return {mediaType:data.star
 function closeConnection(message='The bridge connection was closed explicitly. Reconnect before continuing.',disconnect=true){deactivate();clearInterval(heartbeat);heartbeat=null;const connection=port;port=null;ready=null;opening=null;const reject=rejectOpening;rejectOpening=null;reject?.(Error(message));for(const entry of pending.values()){clearTimeout(entry.timer);entry.reject(Error(message));}pending.clear();if(disconnect)connection?.disconnect();}
 async function waitScreenshot(){const delay=550-(Date.now()-lastScreenshot);if(delay>0)await new Promise(resolve=>{screenshotWait={resolve,timer:setTimeout(()=>{screenshotWait=null;resolve();},delay)};});if(!active)throw Object.assign(Error('Capture is paused.'),{code:'GUIDES_CAPTURE_INTERRUPTED'});}
 async function screenshot(){const token=generation;await waitScreenshot();await visible();await tell('indicator',{visible:false});try{if(!active||generation!==token)throw Error('Capture paused before the screenshot.');lastScreenshot=Date.now();const data=await api.tabs.captureVisibleTab(state.scope.windowId,{format:'jpeg',quality:95});if(!active||generation!==token)throw Error('Capture paused while the screenshot was pending. Review this action manually.');return await compress(data);}finally{if(active)await tell('indicator',{visible:true}).catch(()=>{});}}
-const documentTransitionError=error=>/back.forward cache|bfcache|message channel.*closed|receiving end does not exist|could not establish connection|frame.*removed|context invalidated/i.test(error?.message||'');
+const documentTransitionError=error=>error?.code==='GUIDES_DOCUMENT_TRANSITION'||/back.forward cache|bfcache|message channel.*closed|receiving end does not exist|could not establish connection|frame.*removed|context invalidated/i.test(error?.message||'');
 function priorImage(context){return baseline?.context.doc===context.doc&&baseline.context.revision===context.revision&&viewportEqual(baseline.context.viewport,context.viewport)&&Date.now()-baseline.at<2000?baseline.image:null;}
 async function snapshot(context){
  if(!active)return;const token=generation;
@@ -81,7 +81,8 @@ async function append(event,context){
  if(before&&before.doc===context.doc){
   try{
    image=await screenshot();const after=await tell('context',{id:event.id});
-   if(after.doc!==context.doc||!viewportEqual(before.viewport,after.viewport)||before.revision!==after.revision){if(cached)image=cached;else throw Error('The page changed before a reliable action screenshot could be captured. This action was not saved. Review it and add a manual step.');}
+   if(after.doc!==context.doc||after.navigation!==context.navigation)throw Object.assign(Error('The selected document navigated during screenshot capture.'),{code:'GUIDES_DOCUMENT_TRANSITION'});
+   if(!viewportEqual(before.viewport,after.viewport)||before.revision!==after.revision){if(cached)image=cached;else throw Error('The page changed before a reliable action screenshot could be captured. This action was not saved. Review it and add a manual step.');}
    else if(JSON.stringify(after.target)!==JSON.stringify(context.target)){target=null;warning='An interaction target changed before its screenshot. Review and highlight that step manually.';}
   }catch(error){
    if(!documentTransitionError(error))throw error;
