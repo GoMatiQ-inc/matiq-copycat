@@ -1,12 +1,12 @@
 (() => {
  if(globalThis.__matiqGuidesCapture)return;
- const api=globalThis.browser||chrome,doc=crypto.randomUUID();let active=false,revision=0,controller=null,observer=null,timer=null,badge=null,previousHref=location.href,framesWarned=false;
+ const api=globalThis.browser||chrome,doc=crypto.randomUUID();let active=false,revision=0,controller=null,observer=null,timer=null,badge=null,previousHref=location.href,navigation=crypto.randomUUID(),framesWarned=false;
  const targets=new Map();
  const viewport=()=>({width:innerWidth,height:innerHeight,x:scrollX,y:scrollY,scale:visualViewport?.scale||1,dpr:devicePixelRatio});
  function rectangle(element){if(!element?.isConnected)return null;const r=element.getBoundingClientRect(),x=Math.max(0,r.left),y=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);return right>x&&bottom>y?{x:x/innerWidth,y:y/innerHeight,width:(right-x)/innerWidth,height:(bottom-y)/innerHeight}:null;}
- function context(id){return {doc,revision,viewport:viewport(),target:id?rectangle(targets.get(id)):null,origin:location.origin};}
+ function context(id){if(location.href!==previousHref){previousHref=location.href;navigation=crypto.randomUUID();}return {doc,navigation,revision,viewport:viewport(),target:id?rectangle(targets.get(id)):null,origin:location.origin};}
  function send(value){return api.runtime.sendMessage({type:'capture',...value}).then(result=>{if(result?.error)throw Error(result.error);return result;}).catch(error=>{stop();const node=document.createElement('div');node.id='matiq-guides-capture-error';node.textContent='MatiQ Guides capture stopped. Open the extension to reconnect and review pending steps.';node.setAttribute('role','alert');node.style.cssText='position:fixed;z-index:2147483647;top:0;left:0;background:#fff0de;color:#3b2200;padding:14px;font:14px sans-serif';document.documentElement.append(node);throw error;});}
- function changed(){revision++;clearTimeout(timer);timer=setTimeout(()=>{if(active)send({command:'baseline',context:context()}).catch(()=>{});},250);if(location.href!==previousHref){previousHref=location.href;send({command:'navigation',context:context()}).catch(()=>{});}}
+ function changed(){const navigated=location.href!==previousHref;revision++;clearTimeout(timer);timer=setTimeout(()=>{if(active)send({command:'baseline',context:context()}).catch(()=>{});},250);if(navigated){send({command:'navigation',context:context()}).catch(()=>{});}}
  function role(element){if(element.tagName==='INPUT'&&['button','submit','reset'].includes(element.type))return 'button';if(element.tagName==='A')return 'link';if(element.tagName==='SELECT')return 'dropdown';if(element.type==='checkbox')return 'checkbox';if(element.type==='radio')return 'radio button';if(element.tagName==='INPUT'||element.tagName==='TEXTAREA'||element.isContentEditable)return 'field';return element.getAttribute('role')==='menuitem'?'menu item':'button';}
  function label(element){if(['INPUT','TEXTAREA','SELECT'].includes(element.tagName)||element.isContentEditable)return '';return (element.getAttribute('aria-label')||element.innerText||'').trim().slice(0,100);}
  function action(e){
