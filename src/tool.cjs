@@ -25,12 +25,12 @@ exports.activate = async host => {
   async function enableBridge(){
     if(bridge)return;
     bridge=await B.start({directory:path.join(app.getPath('appData'),'MatiQ Solutions','Guides Bridge'),instance:app.getName(),origins:[`chrome-extension://${identities.chromiumId}/`,identities.firefoxId],report:error=>{failure='Browser bridge cleanup needs attention: '+error.message;notify();},
-      disconnect:async client=>{if(browserOwner!==client)return;quiesce?.resolve();browserOwner=null;if(disposing)return;if(current?.capture?.phase==='recording'&&current.capture.source!=='desktop'){if(working){pendingInterruption='The browser disconnected during an operation. Recording stopped; reconnect and review pending steps.';failure=pendingInterruption;notify();return;}working=true;try{await captureControl('pause','Browser disconnected. Recording stopped; reconnect and review pending steps.');}finally{await endWork();}}notify();},
+      disconnect:async client=>{if(browserOwner!==client)return;quiesce?.resolve();browserOwner=null;finishPending=false;if(disposing)return;if(current?.capture?.phase==='recording'&&current.capture.source!=='desktop'){if(working){pendingInterruption='The browser disconnected during an operation. Recording stopped; reconnect and review pending steps.';failure=pendingInterruption;notify();return;}working=true;try{await captureControl('pause','Browser disconnected. Recording stopped; reconnect and review pending steps.');}finally{await endWork();}}notify();},
       receive:async(message,client)=>{
         if(message.type==='quiesced'&&client===browserOwner&&quiesce?.id===message.control){quiesce.resolve();return {acknowledged:true};}
         if(disposing||disposed)throw Error('Guides is closing. Reopen it before reconnecting.');
         if(message.type==='status')return browserStatus();
-        if(message.type==='select'){if(message.receiver!==bridge.receiver)throw Error('Choose the currently displayed receiving instance.');if(browserOwner&&browserOwner!==client)throw Error('Another browser owns this capture. Stop or disconnect it before selecting this browser.');browserOwner=client;notify();return browserStatus();}
+        if(message.type==='select'){if(message.receiver!==bridge.receiver)throw Error('Choose the currently displayed receiving instance.');if(browserOwner&&browserOwner!==client)throw Error('Another browser owns this capture. Stop or disconnect it before selecting this browser.');browserOwner=client;finishPending=false;notify();return browserStatus();}
         if(browserOwner!==client||message.receiver!==bridge.receiver)throw Error('Select this receiving instance explicitly before recording.');
         if(activeCapture()&&current.capture.source==='desktop')throw Error('Desktop capture owns this guide. Stop it in Guides before recording browser actions.');
         if(exportUnlock)throw Error('Retry export cleanup in Guides before recording.');
