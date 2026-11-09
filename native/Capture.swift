@@ -441,8 +441,9 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             guard var action = gesture else { return };gesture = nil
             if dragged {
                 action.event["action"] = "drag"
+                action.event["target"] = ["x":max(0,min(0.98,(action.point.x-action.frame.minX)/action.frame.width-0.01)),"y":max(0,min(0.98,(action.point.y-action.frame.minY)/action.frame.height-0.01)),"width":0.02,"height":0.02]
                 if let end = event.cgEvent?.location, action.frame.contains(end) {
-                    action.event["destination"] = ["x":max(0,min(0.98,(end.x-action.frame.minX)/action.frame.width)),"y":max(0,min(0.98,(end.y-action.frame.minY)/action.frame.height)),"width":0.02,"height":0.02]
+                    action.event["destination"] = ["x":max(0,min(0.98,(end.x-action.frame.minX)/action.frame.width-0.01)),"y":max(0,min(0.98,(end.y-action.frame.minY)/action.frame.height-0.01)),"width":0.02,"height":0.02]
                 } else { action.event["reviewTarget"] = true }
             } else if event.clickCount == 2 { action.event["action"] = "double-click" }
             pending = action;schedule(0.3)
@@ -494,7 +495,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         if pending?.event["action"] as? String != "fill" {
             flush()
             guard var action = snapshot(focusPoint,action:"fill") else { return }
-            action.event.removeValue(forKey:"label");action.event.removeValue(forKey:"target")
+            action.event.removeValue(forKey:"label")
             pending = action
         }
         schedule(0.7)

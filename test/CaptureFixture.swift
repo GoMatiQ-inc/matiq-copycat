@@ -115,6 +115,13 @@ FileHandle.standardInput.readabilityHandler={ handle in
     } else if command.contains("workflow-shortcut") { key(1,flags:.maskCommand);output(["type":"shortcut-sent"]) }
     else if command.contains("workflow-right") { let rect=screen(button.frame);press(CGPoint(x:rect.midX,y:rect.midY),right:true){output(["type":"right-sent"])} }
     else if command.contains("workflow-escape") { key(53);output(["type":"escape-sent"]) }
+    else if command.contains("workflow-double") {
+     let rect=screen(button.frame),p=CGPoint(x:rect.midX,y:rect.midY),source=CGEventSource(stateID:.hidSystemState)
+     for n in 0...1 { workflowLater(Double(n)*0.15){
+      let down=CGEvent(mouseEventSource:source,mouseType:.leftMouseDown,mouseCursorPosition:p,mouseButton:.left)!;down.setIntegerValueField(.mouseEventClickState,value:Int64(n+1));down.post(tap:.cgSessionEventTap)
+      workflowLater(0.06){let up=CGEvent(mouseEventSource:source,mouseType:.leftMouseUp,mouseCursorPosition:p,mouseButton:.left)!;up.setIntegerValueField(.mouseEventClickState,value:Int64(n+1));up.post(tap:.cgSessionEventTap);if n==1 { output(["type":"double-sent"]) }}
+     }}
+    }
     else if command.contains("workflow-drag") {
      let rect=screen(status.frame),start=CGPoint(x:rect.minX+10,y:rect.midY),end=CGPoint(x:rect.maxX-10,y:rect.midY),source=CGEventSource(stateID:.hidSystemState)
      CGEvent(mouseEventSource:source,mouseType:.leftMouseDown,mouseCursorPosition:start,mouseButton:.left)!.post(tap:.cgSessionEventTap)

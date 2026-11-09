@@ -4,7 +4,7 @@ const C=require('../src/capture.cjs'),P=require('../src/project.cjs'),root=path.
 async function main(){
  require('./native-test-isolation.cjs').assertNativeTestIsolation();assert.equal(process.platform,'darwin');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'copycat-desktop-workflow-'))),program=process.env.GUIDES_WORKFLOW_HELPER||path.join(root,'native/guides-capture');
- let fixture,helper,textedit,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null,primary=null;
+ let fixture,helper,textedit,textEditPID,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null,primary=null;
  const timer=setTimeout(()=>{for(const child of [helper,fixture])if(child?.exitCode===null)child.kill('SIGTERM');},120000);
  function channel(child,label){
   let tail='';const rows=[];child.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const row=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);rows.push(row);}});
@@ -28,16 +28,17 @@ async function main(){
   await command('workflow-drag','drag-sent');await count(8);assert.match(project.guide.steps.at(-1).instruction,/^Drag /);assert.deepEqual(project.guide.steps.at(-1).annotations.filter(a=>a.type==='callout').map(a=>a.text),['1','2']);
   await command('workflow-right','right-sent');await count(9);assert.match(project.guide.steps.at(-1).instruction,/^Right-click /);
   await command('workflow-escape','escape-sent');await count(10);assert.equal(project.guide.steps.at(-1).instruction,'Press Escape');
-  textedit=await require('./textedit-workflow.cjs').openTextEdit({root,temporary});await wait(400);
+  textedit=await require('./textedit-workflow.cjs').openTextEdit({root,temporary});textEditPID=textedit.ready.pid;await wait(400);
   await textedit.command('select','selected');await count(11);await wait(400);
   await textedit.command('bold','clicked');await count(12);assert.ok(['TextEdit','com.apple.TextEdit'].includes(project.guide.steps.at(-1).source.application));
   await textedit.command('save','saved');await count(13);
   assert.ok(/\\b(?:\s|\\)/.test(await fs.readFile(textedit.document,'utf8')),'The actual TextEdit button must change saved formatting.');
   const before=project.guide.steps.slice();await textedit.close();textedit=null;await command('click','clicked');await count(14);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
+  await command('workflow-double','double-sent');await count(15);assert.equal(project.guide.steps.at(-1).instruction,'Double-click “Open settings”');
   helper.stdin.end('stop\n');await nextHelper('stopped');if(helper.exitCode===null)await once(helper,'exit');
   project=C.transition(project,'stop');const file=path.join(temporary,'guide.mqguide');await P.atomicWrite(file,project);const reopened=await P.read(file);assert.deepEqual(reopened,project);assert.ok(!JSON.stringify(project.guide.steps).includes('CONTROLLED-TYPING-SECRET'));
   await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-project.mqguide'),project);
-  proof={passed:true,scope:'Development native component only, not signed packaged qualification',source:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID:textedit?.ready?.pid,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows','editable save/reopen preserves steps and assets']};
+  proof={passed:true,scope:'Development native component only, not signed packaged qualification',source:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows','editable save/reopen preserves steps and assets']};
  }catch(error){primary=error;throw error;}finally{
   if(!proof){await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-failed-project.mqguide'),project);}
   const errors=[];for(const [label,operation] of [
