@@ -25,10 +25,11 @@ function drawContent(){
   const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
   for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
   $('capture-pause').disabled=captureStatus?.phase!=='recording';$('capture-resume').disabled=captureStatus?.phase!=='paused';$('capture-stop').disabled=!active;$('capture-cancel').disabled=!active;
+  $('desktop-workflow').disabled=!!active&&!(captureStatus.source==='desktop'&&captureStatus.phase==='paused');
   $('desktop-start').disabled=!!active&&!(captureStatus.source==='desktop'&&captureStatus.phase==='paused');$('desktop-list').disabled=!!active&&captureStatus.phase==='recording';
   const phase=captureStatus?.source==='desktop'&&captureStatus.phase==='recording'?(desktopStatus?.accepting?(desktopStatus.active?'recording':'starting'):'stopping'):captureStatus?.phase;
   const pending=captureStatus?.source==='desktop'?` Native pending delivery: ${desktopStatus?.pending||0} steps; limit 4 steps or 3 MiB.`:'';
-  $('capture-status').textContent=(captureStatus?`${captureStatus.source==='desktop'?'Selected-window desktop':'Browser'} capture ${phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:'Bridge disabled.')+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'')+pending;
+  $('capture-status').textContent=(captureStatus?`${captureStatus.source==='desktop'?'Desktop':'Browser'} capture ${phase}. ${captureStatus.receipts.length} saved steps. `:'')+(bridgeStatus?`${bridgeStatus.instance} · ${bridgeStatus.finishPending?'Finishing: delivering pending browser steps':bridgeStatus.connected?'Browser selected':'Awaiting explicit extension selection'}`:(captureStatus?.source==='desktop'?'':'Choose Desktop workflow, or enable the browser bridge.'))+(captureStatus?.issues.length?' Warnings: '+captureStatus.issues.join(' '):'')+pending;
   $('title').value=project.guide.title;$('description').value=project.guide.description;
   $('steps').replaceChildren();for(const [i,s] of project.guide.steps.entries()){const li=document.createElement('li'),b=document.createElement('button');b.textContent=`${i+1}. ${s.instruction||'Untitled step'}`;b.setAttribute('aria-current',String(s.id===selected));b.onclick=()=>{selected=s.id;draw();};li.append(b);$('steps').append(li);}
   drawCaptureReview(active);drawSharingReview(active);
@@ -80,6 +81,7 @@ window.guides.subscribe(result=>{if(result.updateOnly){updateState=result.update
 for(const action of ['check','download','restart','cleanup'])$('update-'+action).onclick=()=>run(async()=>{updateState=await request('update-'+action);drawUpdates();});
 $('bridge-enable').onclick=()=>run(async()=>accept(await request('bridge-enable')));
 $('bridge-install').onclick=()=>run(async()=>{await request('bridge-install',$('bridge-browser').value);message('Native bridge registered. Load the matching browser extension explicitly, then connect and select this instance.');});
+$('desktop-workflow').onclick=()=>run(async()=>accept(await request('desktop-workflow')));
 $('desktop-list').onclick=()=>run(async()=>{const windows=await request('desktop-list');const select=$('desktop-window');select.replaceChildren();for(const window of windows){const option=document.createElement('option');option.value=window.id;option.textContent=window.application+' — '+window.title;select.append(option);}if(!windows.length)message('No supported windows selected. Open a desktop application, then refresh the window list.');});
 $('desktop-start').onclick=()=>run(async()=>accept(await request('desktop-start',Number($('desktop-window').value))));
 for(const command of ['pause','resume','stop','cancel'])$('capture-'+command).onclick=()=>run(async()=>accept(await request('capture-control',command)));

@@ -45,14 +45,15 @@ async function list(host){
   return result;
  }catch(error){throw Error(reason||error.message);}finally{clearTimeout(timer);if(process.child.exitCode===null&&process.child.signalCode===null)await process.stop();}
 }
-async function start(host,id,pid,onEvent,onFailure){
- if(!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(pid)||pid<1)throw Error('Select a visible application window.');
+async function start(host,id,pid,onEvent,onFailure,onControl){
+ if(!Number.isSafeInteger(id)||id<0||!Number.isSafeInteger(pid)||pid<0||(id===0)!==(pid===0))throw Error('Select a visible application window.');
  const program=await executable(host);let readyResolve,readyReject,ready=false,expected=false;
  const pending=new Promise((resolve,reject)=>{readyResolve=resolve;readyReject=reject;});
- const process=launch(program,['record',String(id),String(pid)],message=>{
+ const process=launch(program,id===0?['record-desktop']:['record',String(id),String(pid)],message=>{
   if(message.type==='ready'){ready=true;readyResolve();}
   else if(message.type==='issue'){const error=Error(String(message.reason||'Desktop capture was interrupted.').slice(0,1000));if(!ready)readyReject(error);else onFailure(error);}
   else if(message.type==='step'&&ready)onEvent(message);
+  else if(message.type==='control'&&ready&&['pause','stop','cancel'].includes(message.command)&&onControl){expected=true;onControl(message.command);}
  });
  process.exited.then(()=>{if(!ready)readyReject(Error('Native capture ended before it was ready. Check permissions and retry.'));else if(!expected)onFailure(Error('Native capture ended. Review saved steps and explicitly resume.'));},error=>{if(!ready)readyReject(error);else if(!expected)onFailure(error);});
  let timer;try{await Promise.race([pending,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Native capture did not become ready. Check Accessibility permission and retry.')),15000);})]);}

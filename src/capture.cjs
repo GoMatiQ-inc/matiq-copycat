@@ -17,6 +17,10 @@ function instruction(event){
  if(event.action==='fill')return 'Enter the required information in the field';
  if(event.action==='select')return control?`Choose an option in “${control}”`:'Choose an option in the dropdown';
  if(event.action==='toggle')return control?`Change “${control}”`:`Change the ${noun}`;
+ if(event.action==='right-click')return control?'Right-click “'+control+'”':'Right-click the '+noun;
+ if(event.action==='double-click')return control?'Double-click “'+control+'”':'Double-click the '+noun;
+ if(event.action==='drag')return (control?'Drag “'+control+'”':'Drag the '+noun)+(event.destination?' from callout 1 to callout 2':' and review the destination');
+ if(event.action==='shortcut'){const shortcuts={manual:'Use the keyboard shortcut (review its wording)',copy:'Copy',paste:'Paste',cut:'Cut',save:'Save',undo:'Undo',redo:'Redo',find:'Find',open:'Open',new:'New',close:'Close window',all:'Select all',confirm:'Press Return',cancel:'Press Escape',next:'Move to the next field',previous:'Move to the previous field',delete:'Delete'};if(!Object.hasOwn(shortcuts,event.shortcut))throw Error('Unsupported desktop shortcut. Describe this action manually.');return shortcuts[event.shortcut];}
  if(event.action==='click')return control?`Click “${control}”`:`Click the ${noun}`;
  throw Error('Unsupported capture action. Add an editable manual step for this action.');
 }
@@ -49,7 +53,7 @@ function append(project,event){
  if(event.source==='browser'){
   s.source={origin:P.httpOrigin(event.origin,'Browser context must be an HTTP(S) origin without paths or query data.')};
  }else{
-  if(event.action!=='click'||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires a selected application and a supported mouse action.');
+  if(!['click','right-click','double-click','drag','fill','shortcut'].includes(event.action)||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires an application and a supported interaction.');
   s.source={application:event.application};
  }
  s.instruction=instruction(event);
@@ -59,6 +63,8 @@ function append(project,event){
  if(event.source==='desktop'&&event.reviewTarget!==undefined&&typeof event.reviewTarget!=='boolean')throw Error('Desktop target review state is invalid. Stop and retry native capture.');
  const reviewTarget=event.source==='desktop'&&event.reviewTarget===true;
  if(event.target&&!reviewTarget)s.annotations=[{type:'box',...P.rect(event.target),text:''}];
+ if(event.source==='desktop'&&event.action==='drag'&&event.destination){const end=P.rect(event.destination),start=event.target?P.rect(event.target):null;if(start)s.annotations.push({type:'callout',...start,text:'1'});s.annotations.push({type:'callout',...end,text:'2'});}
+ if(event.source==='desktop'&&event.action==='shortcut'&&event.shortcut==='manual')addIssue(next.capture,'A desktop keyboard shortcut needs review. Edit its instruction before sharing.');
  if(reviewTarget)addIssue(next.capture,'The desktop target position could not be monitored reliably. Review this screenshot and add its highlight manually.');
  next.guide.steps.push(s);next.capture.receipts.push(s.id);return {project:P.validate(next),duplicate:false};
 }
