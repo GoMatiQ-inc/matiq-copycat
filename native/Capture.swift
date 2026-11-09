@@ -472,7 +472,9 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         if flags.contains(.command) || flags.contains(.control) {
             // Read a command key only while Command is held; never inspect normal typed characters.
             let commands = ["c":"copy","v":"paste","x":"cut","s":"save","z":flags.contains(.shift) ? "redo":"undo","a":"all","f":"find","o":"open","n":"new","w":"close"]
-            shortcut = flags.contains(.command) ? (commands[event.charactersIgnoringModifiers?.lowercased() ?? ""] ?? "manual"):"manual"
+            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            let recognized = flags.contains(.command) && !flags.contains(.control) && !flags.contains(.option) && (!flags.contains(.shift) || key == "z")
+            shortcut = recognized ? (commands[key] ?? "manual"):"manual"
         } else {
             shortcut = [36:"confirm",76:"confirm",53:"cancel",48:flags.contains(.shift) ? "previous":"next",51:"delete",117:"delete"][Int(event.keyCode)]
         }
