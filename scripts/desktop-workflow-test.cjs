@@ -4,7 +4,7 @@ const C=require('../src/capture.cjs'),P=require('../src/project.cjs'),root=path.
 async function main(){
  require('./native-test-isolation.cjs').assertNativeTestIsolation();assert.equal(process.platform,'darwin');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'copycat-desktop-workflow-'))),program=process.env.GUIDES_WORKFLOW_HELPER||path.join(root,'native/guides-capture');
- let fixture,helper,textedit,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null;
+ let fixture,helper,textedit,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null,primary=null;
  const timer=setTimeout(()=>{for(const child of [helper,fixture])if(child?.exitCode===null)child.kill('SIGTERM');},120000);
  function channel(child,label){
   let tail='';const rows=[];child.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const row=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);rows.push(row);}});
@@ -17,7 +17,7 @@ async function main(){
   fixture=spawn(binary,[],{env:{...process.env,GUIDES_TEST_DESKTOP_WORKFLOW:'1'},stdio:['pipe','pipe','ignore']});fixtureOwned=captureTree(capture(fixture));const nextFixture=channel(fixture,'Fixture');const selected=await nextFixture('ready');
   helper=spawn(program,['record-desktop'],{stdio:['pipe','pipe','ignore']});helperOwned=captureTree(capture(helper));const nextHelper=channel(helper,'Recorder');await nextHelper('ready');
   let tail='';helper.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const event=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);if(event.type==='step'){try{project=C.append(project,{...event,id:require('node:crypto').randomUUID(),session:project.capture.id,scope:project.capture.scope,sequence:project.capture.receipts.length}).project;}catch(error){failure=error;}}}});
-  async function count(n){for(let i=0;i<200;i++){if(failure)throw failure;if(project.guide.steps.length>=n){assert.equal(project.guide.steps.length,n,'No extra or duplicate desktop actions.');return;}await wait(50);}throw Error('Expected '+n+' actual desktop steps; received '+project.guide.steps.length);}
+  async function count(n){for(let i=0;i<200;i++){if(failure)throw failure;if(project.guide.steps.length>=n){assert.equal(project.guide.steps.length,n,'No extra or duplicate desktop actions.');console.log('Validated '+n+' actual desktop actions.');return;}await wait(50);}throw Error('Expected '+n+' actual desktop steps; received '+project.guide.steps.length);}
   async function command(value,type){fixture.stdin.write(value+'\n');if(type)await nextFixture(type);}
   await command('click','clicked');await count(1);assert.equal(project.guide.steps[0].instruction,'Click “Open settings”');
   await command('workflow-menu-open','workflow-command');await count(2);await wait(400);
@@ -38,14 +38,14 @@ async function main(){
   project=C.transition(project,'stop');const file=path.join(temporary,'guide.mqguide');await P.atomicWrite(file,project);const reopened=await P.read(file);assert.deepEqual(reopened,project);assert.ok(!JSON.stringify(project.guide.steps).includes('CONTROLLED-TYPING-SECRET'));
   await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-project.mqguide'),project);
   proof={passed:true,scope:'Development native component only, not signed packaged qualification',source:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID:textedit?.ready?.pid,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows','editable save/reopen preserves steps and assets']};
- }finally{
+ }catch(error){primary=error;throw error;}finally{
   if(!proof){await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-failed-project.mqguide'),project);}
   const errors=[];for(const [label,operation] of [
    ['TextEdit',()=>textedit?.close()],
    ['Recorder',()=>cleanupDesktop({app:helper?{process:()=>helper,close:async()=>{if(helper.exitCode===null){const done=once(helper,'exit');helper.stdin.end('stop\n');await done;}}}:null,owned:helperOwned})],
    ['Fixture',()=>cleanupDesktop({app:fixture?{process:()=>fixture,close:async()=>{if(fixture.exitCode===null){const done=once(fixture,'exit');fixture.stdin.end('quit\n');await done;}}}:null,owned:fixtureOwned})]
   ])try{await operation();}catch(error){errors.push(Error(label+': '+error.message));}
-  clearTimeout(timer);if(!errors.length)await fs.rm(temporary,{recursive:true,force:true});if(errors.length)throw new AggregateError(errors,'Inspect every owned desktop-workflow cleanup failure.');
+  clearTimeout(timer);if(!errors.length)await fs.rm(temporary,{recursive:true,force:true});if(errors.length)throw new AggregateError([...(primary?[primary]:[]),...errors],(primary?'Desktop workflow failed: '+primary.message+'. ':'')+'Inspect every owned desktop-workflow cleanup failure.');
  }
  proof.cleanupVerified=true;await fs.writeFile(path.join(root,'.validation/desktop-workflow-component-proof.json'),JSON.stringify(proof,null,2)+'\n');console.log('PASS: actual desktop workflow component across menus, dialogs, gestures and TextEdit; saved/reopened with owned cleanup.');
 }

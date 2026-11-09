@@ -59,10 +59,18 @@ func screen(_ rect: NSRect) -> CGRect {
  let top=NSScreen.screens.first!.frame.maxY
  return CGRect(x:screenRect.minX,y:top-screenRect.maxY,width:screenRect.width,height:screenRect.height)
 }
+func workflowLater(_ seconds:TimeInterval,_ body:@escaping()->Void) {
+ let timer=Timer(timeInterval:seconds,repeats:false){_ in body()};RunLoop.main.add(timer,forMode:.common)
+}
+func fixtureMain(_ body:@escaping()->Void) {
+ if ProcessInfo.processInfo.environment["GUIDES_TEST_DESKTOP_WORKFLOW"] == "1" {
+  CFRunLoopPerformBlock(CFRunLoopGetMain(),CFRunLoopMode.commonModes.rawValue,body);CFRunLoopWakeUp(CFRunLoopGetMain())
+ } else { DispatchQueue.main.async(execute:body) }
+}
 FileHandle.standardInput.readabilityHandler={ handle in
  let data=handle.availableData
  let command=String(data:data,encoding:.utf8) ?? ""
- DispatchQueue.main.async {
+ fixtureMain {
   if data.isEmpty||command.contains("quit")||command.contains("stop"){ app.terminate(nil) }
   else if ProcessInfo.processInfo.environment["GUIDES_TEST_DESKTOP_WORKFLOW"] == "1" && command.contains("workflow-") {
    app.activate(ignoringOtherApps:true)
@@ -76,13 +84,13 @@ FileHandle.standardInput.readabilityHandler={ handle in
     let source=CGEventSource(stateID:.hidSystemState)
     CGEvent(mouseEventSource:source,mouseType:.mouseMoved,mouseCursorPosition:p,mouseButton:.left)!.post(tap:.cgSessionEventTap)
     CGEvent(mouseEventSource:source,mouseType:right ? .rightMouseDown:.leftMouseDown,mouseCursorPosition:p,mouseButton:right ? .right:.left)!.post(tap:.cgSessionEventTap)
-    DispatchQueue.main.asyncAfter(deadline:.now()+0.1){CGEvent(mouseEventSource:source,mouseType:right ? .rightMouseUp:.leftMouseUp,mouseCursorPosition:p,mouseButton:right ? .right:.left)!.post(tap:.cgSessionEventTap);after?()}
+    workflowLater(0.1){CGEvent(mouseEventSource:source,mouseType:right ? .rightMouseUp:.leftMouseUp,mouseCursorPosition:p,mouseButton:right ? .right:.left)!.post(tap:.cgSessionEventTap);after?()}
    }
    func key(_ code:CGKeyCode,flags:CGEventFlags=[]) {
     let source=CGEventSource(stateID:.hidSystemState)
     for down in [true,false] { let event=CGEvent(keyboardEventSource:source,virtualKey:code,keyDown:down)!;event.flags=flags;event.post(tap:.cgSessionEventTap) }
    }
-   DispatchQueue.main.asyncAfter(deadline:.now()+0.35){
+   workflowLater(0.35){
     if command.contains("workflow-menu-open") || command.contains("workflow-menu-dialog") {
      let own=AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
      guard let bar=attribute(own,kAXMenuBarAttribute as CFString) else { output(["type":"fixture-error","reason":"No native menu bar"]);return }
@@ -97,7 +105,7 @@ FileHandle.standardInput.readabilityHandler={ handle in
      let rect=dialog.convertToScreen(button.frame),top=NSScreen.screens.first!.frame.maxY;press(CGPoint(x:rect.midX,y:top-rect.midY))
     } else if command.contains("workflow-type") {
      let rect=screen(field.frame);press(CGPoint(x:rect.midX,y:rect.midY)){
-      DispatchQueue.main.asyncAfter(deadline:.now()+0.35){
+      workflowLater(0.35){
        let text=Array("CONTROLLED-TYPING-SECRET".utf16)
        text.withUnsafeBufferPointer { buffer in
         for down in [true,false] { let event=CGEvent(keyboardEventSource:CGEventSource(stateID:.hidSystemState),virtualKey:0,keyDown:down)!;event.keyboardSetUnicodeString(stringLength:text.count,unicodeString:buffer.baseAddress!);event.post(tap:.cgSessionEventTap) }
