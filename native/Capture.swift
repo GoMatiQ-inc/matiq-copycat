@@ -529,7 +529,7 @@ let recording = args[1] == "record" || args[1] == "record-desktop"
 if recording && !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary) {
     fail("Accessibility permission is required for control labels. In System Settings → Privacy & Security → Accessibility, enable the application named in the macOS permission request, then retry.")
 }
-NSApplication.shared.setActivationPolicy(.prohibited)
+NSApplication.shared.setActivationPolicy(args[1] == "record-desktop" ? .accessory:.prohibited)
 var recorder: Recorder?
 var workflowRecorder: WorkflowRecorder?
 Task { @MainActor in
