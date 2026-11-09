@@ -12,7 +12,7 @@ function state(value) {
 }
 function label(value){if(typeof value!=='string')return '';const cleaned=value.trim().replace(/\s+/g,' ');if(cleaned.length>60||/[<>@\r\n]/.test(cleaned)||/password|secret|token|api.?key|bearer|authorization|\b\d{5,}\b|[a-zA-Z0-9_\-]{24,}/i.test(cleaned))return '';return cleaned;}
 function instruction(event){
- const control=label(event.label),noun=['button','link','checkbox','radio button','menu item','field','dropdown'].includes(event.control)?event.control:'control';
+ const control=label(event.label),noun=['button','link','checkbox','radio button','menu item','menu','field','dropdown'].includes(event.control)?event.control:'control';
  if(event.action==='navigate')return `Navigate to ${event.origin}`;
  if(event.action==='fill')return 'Enter the required information in the field';
  if(event.action==='select')return control?`Choose an option in “${control}”`:'Choose an option in the dropdown';

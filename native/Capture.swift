@@ -42,7 +42,7 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout A
           let element = found else { return [:] }
     var owner: pid_t = 0
     guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return [:] }
-    let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item"]
+    let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item", "AXMenuBarItem": "menu"]
     let role = text(element, kAXRoleAttribute as CFString)
     var windowValue: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowValue) == .success,
