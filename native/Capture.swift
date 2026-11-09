@@ -363,7 +363,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             }
             let item = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
             item.button?.title = "● Copycat"
-            item.button?.accessibilityLabel = "Copycat is recording the desktop"
+            item.button?.setAccessibilityLabel("Copycat is recording the desktop")
             let menu = NSMenu()
             for (title,selector) in [("Pause recording",#selector(pause)),("Finish guide",#selector(finish)),("Cancel capture",#selector(cancel))] {
                 let row = NSMenuItem(title:title,action:selector,keyEquivalent:"");row.target = self;menu.addItem(row)
@@ -387,13 +387,16 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         if command != "cancel" { flush() };pending = nil;gesture = nil
         for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) };observers = []
         if let observer = screenObserver { NotificationCenter.default.removeObserver(observer) };screenObserver = nil
-        if let item = statusItem { NSStatusBar.system.removeStatusItem(item) };statusItem = nil
+        statusItem?.button?.title = "Stopping Copycat…"
+        statusItem?.menu = nil
+        for frame in frames { frame.stopped = true;frame.image = nil }
         if let reason = reason { send(["type":"issue","reason":reason]) }
         if let command = command { send(["type":"control","command":command]) }
         Task { @MainActor in
             var failed = false
             for frame in frames { do { try await frame.stop() } catch { failed = true } }
             frames = []
+            if let item = statusItem { NSStatusBar.system.removeStatusItem(item) };statusItem = nil
             if failed { send(["type":"issue","reason":"A desktop screen stream failed to stop cleanly. Retry capture cleanup before closing."]) }
             send(["type":"stopped"])
             exit(failed || reason != nil ? 1:0)
@@ -439,7 +442,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             if dragged {
                 action.event["action"] = "drag"
                 if let end = event.cgEvent?.location, action.frame.contains(end) {
-                    action.event["destination"] = ["x":max(0,min(.98,(end.x-action.frame.minX)/action.frame.width)),"y":max(0,min(.98,(end.y-action.frame.minY)/action.frame.height)),"width":.02,"height":.02]
+                    action.event["destination"] = ["x":max(0,min(0.98,(end.x-action.frame.minX)/action.frame.width)),"y":max(0,min(0.98,(end.y-action.frame.minY)/action.frame.height)),"width":0.02,"height":0.02]
                 } else { action.event["reviewTarget"] = true }
             } else if event.clickCount == 2 { action.event["action"] = "double-click" }
             pending = action;schedule(0.3)
@@ -466,10 +469,10 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             }
         }
         var shortcut: String?
-        if flags.contains(.command) {
+        if flags.contains(.command) || flags.contains(.control) {
             // Read a command key only while Command is held; never inspect normal typed characters.
             let commands = ["c":"copy","v":"paste","x":"cut","s":"save","z":flags.contains(.shift) ? "redo":"undo","a":"all","f":"find","o":"open","n":"new","w":"close"]
-            shortcut = commands[event.charactersIgnoringModifiers?.lowercased() ?? ""] ?? "manual"
+            shortcut = flags.contains(.command) ? (commands[event.charactersIgnoringModifiers?.lowercased() ?? ""] ?? "manual"):"manual"
         } else {
             shortcut = [36:"confirm",76:"confirm",53:"cancel",48:flags.contains(.shift) ? "previous":"next",51:"delete",117:"delete"][Int(event.keyCode)]
         }
