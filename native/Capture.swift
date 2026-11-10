@@ -39,11 +39,11 @@ func text(_ element: AXUIElement, _ key: CFString) -> String {
 func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout AXUIElement?) -> [String: Any] {
     var found: AXUIElement?
     guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &found) == .success,
-          let element = found else { return [:] }
+          let hitElement = found else { return [:] }
     var owner: pid_t = 0
-    guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return [:] }
+    guard AXUIElementGetPid(hitElement, &owner) == .success, owner == pid else { return [:] }
     let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item", "AXMenuBarItem": "menu"]
-    var actionable = element
+    var actionable = hitElement
     for _ in 0..<5 {
         if roles[text(actionable,kAXRoleAttribute as CFString)] != nil { break }
         var parent: CFTypeRef?
@@ -54,7 +54,7 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout A
         guard AXUIElementGetPid(next,&owner) == .success,owner == pid else { break }
         actionable = next
     }
-    let element = roles[text(actionable,kAXRoleAttribute as CFString)] != nil ? actionable:element
+    let element = roles[text(actionable,kAXRoleAttribute as CFString)] != nil ? actionable:hitElement
     let role = text(element, kAXRoleAttribute as CFString)
     var windowValue: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowValue) == .success,
