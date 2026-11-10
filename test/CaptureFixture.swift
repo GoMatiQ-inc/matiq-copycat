@@ -50,6 +50,9 @@ window.makeKeyAndOrderFront(nil)
 app.activate(ignoringOtherApps:true)
 if ProcessInfo.processInfo.environment["GUIDES_TEST_DESKTOP_WORKFLOW"] == "1" {
  let menu=NSMenu();let own=NSMenuItem();own.submenu=NSMenu(title:"Fixture");menu.addItem(own)
+ let edit=NSMenuItem(title:"Edit",action:nil,keyEquivalent:"");let editing=NSMenu(title:"Edit")
+ for (title,selector,key) in [("Cut","cut:","x"),("Copy","copy:","c"),("Paste","paste:","v"),("Select All","selectAll:","a")] { editing.addItem(NSMenuItem(title:title,action:Selector(selector),keyEquivalent:key)) }
+ edit.submenu=editing;menu.addItem(edit)
  let workflow=NSMenuItem(title:"Workflow",action:nil,keyEquivalent:"");let actions=NSMenu(title:"Workflow")
  for (title,key) in [("Open dialog",""),("Save","s")] { let item=NSMenuItem(title:title,action:#selector(Actions.menuSelected(_:)),keyEquivalent:key);item.target=action;actions.addItem(item) }
  workflow.submenu=actions;menu.addItem(workflow);app.mainMenu=menu
@@ -124,8 +127,8 @@ FileHandle.standardInput.readabilityHandler={ handle in
     } else if command.contains("workflow-edit-select") {
      let rect=screen(field.frame);press(CGPoint(x:rect.midX,y:rect.midY)){workflowLater(0.35){key(0,flags:.maskCommand);output(["type":"edit-selected"])}}
     } else if command.contains("workflow-copy") { key(8,flags:.maskCommand);output(["type":"copied"]) }
-    else if command.contains("workflow-cut") { key(7,flags:.maskCommand);workflowLater(0.45){output(["type":"cut","empty":field.stringValue.isEmpty])} }
-    else if command.contains("workflow-paste") { key(9,flags:.maskCommand);workflowLater(0.45){output(["type":"pasted","restored":field.stringValue.contains("CONTROLLED-TYPING-SECRET")])} }
+    else if command.contains("workflow-cut") { key(7,flags:.maskCommand);workflowLater(0.45){output(["type":"cut","empty":(field.currentEditor()?.string ?? field.stringValue).isEmpty])} }
+    else if command.contains("workflow-paste") { key(9,flags:.maskCommand);workflowLater(0.45){output(["type":"pasted","restored":(field.currentEditor()?.string ?? field.stringValue).contains("CONTROLLED-TYPING-SECRET")])} }
     else if command.contains("workflow-shortcut") { key(1,flags:.maskCommand);output(["type":"shortcut-sent"]) }
     else if command.contains("workflow-right") { let rect=screen(button.frame);press(CGPoint(x:rect.midX,y:rect.midY),right:true){output(["type":"right-sent"])} }
     else if command.contains("workflow-escape") { key(53);output(["type":"escape-sent"]) }
