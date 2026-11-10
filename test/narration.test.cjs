@@ -23,3 +23,11 @@ test('invalid transcription and missing screenshot fail without mutating the gui
 });
 
 test('digital silence is excluded from inference without discarding quiet nonzero speech',()=>{const bytes=wav();assert.equal(N.silent(N.audioBytes(bytes)),true);bytes.writeInt16LE(1,44);assert.equal(N.silent(N.audioBytes(bytes)),false);});
+
+test('cancel removes retained audio from the same capture while preserving other guides and captures',async t=>{
+ const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),{randomUUID}=require('node:crypto');
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'copycat-audio-cancel-'));t.after(()=>fs.rm(directory,{recursive:true,force:true}));const project=C.begin(P.create(),'desktop'),jobs=[];
+ for(const capture of [project.capture.id,randomUUID()]){const folder=path.join(directory,'narration',randomUUID());await fs.mkdir(folder,{recursive:true});await fs.writeFile(path.join(folder,'job.json'),JSON.stringify({guide:project.guide.id,capture}));await fs.writeFile(path.join(folder,'0.wav'),wav());jobs.push(folder);}
+ const narration=N.create({host:{dataDir:directory},app:{getPath:()=>directory},dialog:{},systemPreferences:{},apply:()=>{},changed:()=>{}});await narration.discard(project);
+ await assert.rejects(fs.access(jobs[0]),{code:'ENOENT'});assert.ok((await fs.stat(path.join(jobs[1],'0.wav'))).isFile());await narration.discard(project);await narration.dispose();
+});

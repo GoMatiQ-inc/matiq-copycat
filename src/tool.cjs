@@ -57,6 +57,7 @@ exports.activate = async host => {
     if(owned){await owned.stop();if(desktop===owned)desktop=null;}
     try{await host.view.webContents.executeJavaScript('window.guidesStopVoice ? window.guidesStopVoice() : Promise.resolve()');}catch{narration.reportError('input');}
     try{await narration.finish({cancel:cancelVoice});}catch(error){failure=error.message;if(activeCapture())await captureWrite(C.warn(current,'Narration incomplete. '+error.message));}
+    if(cancelVoice)await narration.discard(current);
     await desktopQueue;
   }
   function desktopInterrupted(error){

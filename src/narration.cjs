@@ -71,9 +71,14 @@ function create({host,app,dialog,systemPreferences,apply,changed}){
   }failure='';changed();
  }
  async function retry(project){try{await retryJob(project);}catch{await queue;job=null;failure='Narration retry failed. Its audio remains local. Reopen the original guide, verify its model and audio files, then retry.';changed();throw Error(failure);}}
+ async function discard(project){
+  let names;try{names=await fs.readdir(root);}catch(error){if(error.code==='ENOENT')return;throw error;}
+  for(const id of names){if(!/^[0-9a-f-]{36}$/.test(id))continue;const directory=path.join(root,id);let data;try{data=JSON.parse(await fs.readFile(path.join(directory,'job.json'),'utf8'));}catch{throw Error('Retained narration cleanup failed. Preserve its local files and retry cancellation.');}if(data.guide===project.guide.id&&data.capture===project.capture?.id)await fs.rm(directory,{recursive:true,force:true});}
+  failure='';changed();
+ }
  async function recover(project){try{for(const id of await fs.readdir(root)){if(!/^[0-9a-f-]{36}$/.test(id))continue;const data=JSON.parse(await fs.readFile(path.join(root,id,'job.json'),'utf8'));if(data.guide===project.guide.id){failure='Narration was interrupted. Its audio is retained locally; stop capture and choose Retry narration.';break;}}}catch(e){if(e.code!=='ENOENT')failure='Narration recovery needs attention. Preserve its local files before retrying.';}changed();}
  async function dispose(){controller?.abort();if(worker){worker.stdin.end();await new Promise(resolve=>{if(worker.exitCode!==null)return resolve();worker.once('close',resolve);});}await queue;}
  function reportError(kind){failure=kind==='limit'?'Narration reached its one-hour limit. Stop this guide and begin another.':'Microphone capture stopped. Narration may be incomplete; stop and retry its retained audio.';if(job)job.error=Error(failure);changed();}
- return {status,reportError,prepare,begin,chunk,finish,retry,recover,dispose,cancelDownload:()=>controller?.abort()};
+ return {status,reportError,prepare,begin,chunk,finish,retry,recover,discard,dispose,cancelDownload:()=>controller?.abort()};
 }
 module.exports={MODEL,audioBytes,silent,attach,create};
