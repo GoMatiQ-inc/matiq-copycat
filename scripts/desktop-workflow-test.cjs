@@ -55,7 +55,7 @@ async function main(){
   if(process.env.GUIDES_TEST_CHROMIUM){
    const executable=process.env.GUIDES_TEST_CHROMIUM,bundle=executable.slice(0,executable.indexOf('.app/')+4),profile=path.join(temporary,'browser');
    const crash=require('./browser-crash-fixture.cjs'),baseline=crash.crashHandlers(bundle);
-   browserChild=spawn(executable,['--user-data-dir='+profile,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-updater-scheduler','--disable-sync','--force-renderer-accessibility','about:blank'],{stdio:['ignore','ignore','ignore']});
+   browserChild=spawn(executable,['--user-data-dir='+profile,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-updater-scheduler','--disable-sync','about:blank'],{stdio:['ignore','ignore','ignore']});
    browserOwned=captureTree(capture(browserChild));let port;
    for(let i=0;i<200;i++){try{port=Number((await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0]);if(port)break;}catch{}if(browserChild.exitCode!==null)throw Error('Owned browser exited before its loopback inspector was ready.');await wait(50);}
    assert.ok(port);browser=await require('playwright').chromium.connectOverCDP('http://127.0.0.1:'+port);browserVersion=browser.version();
@@ -64,7 +64,7 @@ async function main(){
    execFileSync('/usr/bin/osascript',['-l','JavaScript','-e','Application("System Events").processes.whose({unixId:'+browserChild.pid+'})()[0].frontmost=true;'],{timeout:10000,stdio:'pipe'});await wait(1800);
    const point=await page.getByRole('button',{name:'Continue desktop workflow',exact:true}).evaluate(b=>{const r=b.getBoundingClientRect();return {x:screenX+r.x+r.width/2,y:screenY+outerHeight-innerHeight+r.y+r.height/2};});
    await command('workflow-pointer|'+browserChild.pid+'|'+point.x+'|'+point.y,'pointer-sent');await page.waitForFunction(()=>window.clicked===true);await count(++total);
-   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.ok(['Click “Continue desktop workflow”','Click the control'].includes(project.guide.steps.at(-1).instruction),'Use a real accessible browser label or an editable generic instruction; never invent it.');
+   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.equal(project.guide.steps.at(-1).instruction,'Click “Continue desktop workflow”','A normal browser button must expose its real label without forced accessibility launch flags.');
    browserOwned=captureTree(capture(browserChild));browserCrashOwned=crash.captureOwnedCrashHelpers({bundle,baseline,known:browserCrashOwned});
    await cleanupDesktop({app:{process:()=>browserChild,close:()=>browser.close()},owned:[...browserOwned,...browserCrashOwned]});browser=null;browserChild=null;browserOwned=[];browserCrashOwned=[];
   }
