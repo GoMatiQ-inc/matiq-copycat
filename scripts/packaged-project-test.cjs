@@ -28,7 +28,7 @@ async function main(){
    const publishers=JSON.parse(asar.extractFile(archive,'catalog/trust.json')).publishers;
    const bytes=await fs.readFile(process.env.GUIDES_SUITE_PACKAGE),envelope=JSON.parse(await fs.readFile(process.env.GUIDES_SUITE_PACKAGE+'.release.json'));
    const sdk=require('@matiq-solutions/sdk');assert.ok(sdk.verify(envelope.signed,envelope.signature,publishers[envelope.publisher]));assert.equal(sdk.hash(bytes),envelope.signed.packages['darwin-arm64'].sha256);
-   record=await new (require('@matiq-solutions/runtime').ToolStore)({root:path.join(profile,'tool-store'),publishers}).install(bytes,{approveCapabilities:true,expectedId:'com.matiq.guides',expectedVersion:candidate.version,expectedCapabilities:['files','computer']});
+   record=await new (require('@matiq-solutions/runtime').ToolStore)({root:path.join(profile,'tool-store'),publishers}).install(bytes,{approveCapabilities:true,expectedId:'com.matiq.guides',expectedVersion:candidate.version,expectedCapabilities:JSON.parse(execFileSync('git',['show',candidate.commit+':matiq-tool.json'],{cwd:root,encoding:'utf8'})).capabilities});
    await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify({autoUpdates:false}));
   }
   execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',path.dirname(contents)],{timeout:120000,stdio:'pipe'});

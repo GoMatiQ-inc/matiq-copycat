@@ -540,6 +540,24 @@ let geometryWarning = "The selected window moved or resized while its screenshot
 }
 
 let args = CommandLine.arguments
+if args.count == 5 && args[1] == "transcribe" {
+    let worker = Process()
+    worker.executableURL = URL(fileURLWithPath:args[0]).deletingLastPathComponent().appendingPathComponent("whisper-cli")
+    worker.arguments = ["--model",args[2],"--file",args[3],"--language","en","--max-context","0","--output-json-full","--output-file",args[4]]
+    worker.standardInput = FileHandle.nullDevice;worker.standardOutput = FileHandle.nullDevice;worker.standardError = FileHandle.nullDevice
+    func stopSpeech() {
+        if worker.isRunning { worker.terminate() }
+        DispatchQueue.global().asyncAfter(deadline:.now()+2) { if worker.isRunning { kill(worker.processIdentifier,SIGKILL) } }
+    }
+    do {
+        try worker.run()
+        FileHandle.standardInput.readabilityHandler = { handle in _ = handle.availableData;stopSpeech() }
+        let deadline = DispatchWorkItem { stopSpeech() }
+        DispatchQueue.global().asyncAfter(deadline:.now()+120,execute:deadline)
+        worker.waitUntilExit();deadline.cancel();FileHandle.standardInput.readabilityHandler = nil
+        exit(worker.terminationStatus == 0 ? 0:1)
+    } catch { exit(1) }
+}
 if args.count == 2 && args[1] == "probe" {
     send(["type": "permissions", "screen": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()])
     exit(0)

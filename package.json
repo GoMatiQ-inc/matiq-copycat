@@ -1,7 +1,7 @@
 {
   "name": "matiq-copycat",
   "productName": "MatiQ Copycat",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
@@ -27,7 +27,8 @@
     "verify:release": "node scripts/verify-release.cjs",
     "tool:package": "node scripts/package-tool.cjs",
     "test:packaged-project": "node scripts/packaged-project-test.cjs",
-    "test:firefox": "node scripts/firefox-browser-test.cjs"
+    "test:firefox": "node scripts/firefox-browser-test.cjs",
+    "prepare:speech-engine": "node scripts/prepare-speech-engine.cjs"
   },
   "dependencies": {
     "@matiq-solutions/runtime": "https://github.com/GoMatiQ-inc/matiq-solutions/releases/download/sdk-v0.1.3/matiq-solutions-runtime-0.1.3.tgz",
@@ -54,7 +55,8 @@
       "minimumSystemVersion": "14.2",
       "hardenedRuntime": true,
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "Capture screenshots only for the workflow you explicitly record."
+        "NSScreenCaptureUsageDescription": "Capture screenshots only for the workflow you explicitly record.",
+        "NSMicrophoneUsageDescription": "Transcribe spoken instructions locally only when you explicitly enable voice recording."
       }
     },
     "files": [
@@ -84,6 +86,18 @@
       {
         "from": "native/guides-capture",
         "to": "native/guides-capture"
+      },
+      {
+        "from": "native/whisper-cli",
+        "to": "native/whisper-cli"
+      },
+      {
+        "from": "native/WHISPER-LICENSE",
+        "to": "native/WHISPER-LICENSE"
+      },
+      {
+        "from": "native/speech-engine-build.json",
+        "to": "native/speech-engine-build.json"
       }
     ]
   },
