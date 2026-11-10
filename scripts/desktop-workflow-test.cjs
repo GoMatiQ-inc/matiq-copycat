@@ -73,7 +73,7 @@ async function main(){
   }
   await command('click','clicked');await count(++total);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
   await command('workflow-double','double-sent');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Double-click “Open settings”');
-  const originBefore=project.guide.steps.length;await command('workflow-scroll');const scrolled=await nextFixture('scrolled');assert.ok(scrolled.origin>0,'The actual native scroll view must move.');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Scroll to the required content');assert.equal(total,originBefore+1);
+  const originBefore=project.guide.steps.length;await command('workflow-scroll');const scrolled=await nextFixture('scrolled');assert.notEqual(scrolled.origin,scrolled.before,'The actual native scroll view must move.');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Scroll to the required content');assert.equal(total,originBefore+1);
   if(actualApp){
    const pid=helperOwned[0].pid;
    const source='var p=Application("System Events").processes.whose({unixId:'+pid+'})()[0];var items=[];for(var b of p.menuBars())items=items.concat(b.menuBarItems());var item=items.find(x=>{try{return String(x.name()).includes("Copycat");}catch{return false;}});if(!item)throw Error("Owned recording menu-bar item is missing.");item.click();delay(.2);item.menus[0].menuItems.byName("Pause recording").click();';

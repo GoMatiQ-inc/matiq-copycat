@@ -65,7 +65,7 @@ test('unverified native target is omitted and visibly requires manual review',()
 test('desktop workflow actions use bounded rule-based wording and never retain raw interaction values',()=>{
  for(const [action,more,expected] of [
   ['right-click',{},'Right-click “Settings”'],['double-click',{},'Double-click “Settings”'],['drag',{destination:{x:.6,y:.6,width:.02,height:.02}},'Drag “Settings” from callout 1 to callout 2'],
-  ['scroll',{},'Scroll to the required content'],['fill',{},'Enter the required information in the field'],['shortcut',{shortcut:'save'},'Save'],['shortcut',{shortcut:'paste'},'Paste']
+  ['keyboard',{},'Complete the keyboard interaction (review this step)'],['shortcut',{shortcut:'space'},'Press Space'],['scroll',{},'Scroll to the required content'],['fill',{},'Enter the required information in the field'],['shortcut',{shortcut:'save'},'Save'],['shortcut',{shortcut:'paste'},'Paste']
  ]){
   const p=C.begin(P.create(),'desktop'),e=event(p,{source:'desktop',application:'Controlled desktop app',action,...more,typed:'CONTROLLED-RAW-SECRET',clipboard:'CONTROLLED-RAW-SECRET',value:'CONTROLLED-RAW-SECRET'});
   const next=C.append(p,e).project;assert.equal(next.guide.steps[0].instruction,expected);assert.ok(!JSON.stringify(next).includes('CONTROLLED-RAW-SECRET'));

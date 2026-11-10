@@ -487,6 +487,8 @@ let geometryWarning = "The selected window moved or resized while its screenshot
                 focusPoint = CGPoint(x:origin.x+dimensions.width/2,y:origin.y+dimensions.height/2)
             }
         }
+        let focusedElement = focused.flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement):nil }
+        let editable = focusedElement.map { ["AXTextField","AXTextArea","AXComboBox"].contains(text($0,kAXRoleAttribute as CFString)) } ?? false
         var shortcut: String?
         if flags.contains(.command) || flags.contains(.control) {
             // Read a command key only while Command is held; never inspect normal typed characters.
@@ -495,7 +497,8 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             let recognized = flags.contains(.command) && !flags.contains(.control) && !flags.contains(.option) && (!flags.contains(.shift) || key == "z")
             shortcut = recognized ? (commands[key] ?? "manual"):"manual"
         } else {
-            shortcut = [36:"confirm",76:"confirm",53:"cancel",48:flags.contains(.shift) ? "previous":"next",51:"delete",117:"delete"][Int(event.keyCode)]
+            shortcut = [36:"confirm",76:"confirm",53:"cancel",48:flags.contains(.shift) ? "previous":"next"][Int(event.keyCode)]
+            if !editable { shortcut = shortcut ?? [49:"space",51:"delete",117:"delete",123:"left",124:"right",125:"down",126:"up",115:"home",119:"end",116:"page-up",121:"page-down"][Int(event.keyCode)] }
         }
         if let shortcut = shortcut {
             flush()
@@ -504,16 +507,13 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             action.event.removeValue(forKey:"target")
             pending = action;flush();return
         }
-        // Focused editable-control interaction only; no key characters, values or clipboard reads.
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier),kAXFocusedUIElementAttribute as CFString,&value) == .success,
-              let value = value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return }
-        let element = value as! AXUIElement
-        guard ["AXTextField","AXTextArea","AXComboBox"].contains(text(element,kAXRoleAttribute as CFString)) else { return }
-        if pending?.event["action"] as? String != "fill" {
+        // One generic burst; normal typed characters and values are never inspected.
+        let actionName = editable ? "fill":"keyboard"
+        if pending?.event["action"] as? String != actionName {
             flush()
-            guard var action = snapshot(focusPoint,action:"fill") else { return }
+            guard var action = snapshot(focusPoint,action:actionName) else { return }
             action.event.removeValue(forKey:"label")
+            if !editable { action.event.removeValue(forKey:"target") }
             pending = action
         }
         schedule(0.7)
