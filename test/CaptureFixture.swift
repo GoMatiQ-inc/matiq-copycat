@@ -121,7 +121,12 @@ FileHandle.standardInput.readabilityHandler={ handle in
        };output(["type":"typed"])
       }
      }
-    } else if command.contains("workflow-shortcut") { key(1,flags:.maskCommand);output(["type":"shortcut-sent"]) }
+    } else if command.contains("workflow-edit-select") {
+     let rect=screen(field.frame);press(CGPoint(x:rect.midX,y:rect.midY)){workflowLater(0.35){key(0,flags:.maskCommand);output(["type":"edit-selected"])}}
+    } else if command.contains("workflow-copy") { key(8,flags:.maskCommand);output(["type":"copied"]) }
+    else if command.contains("workflow-cut") { key(7,flags:.maskCommand);workflowLater(0.45){output(["type":"cut","empty":field.stringValue.isEmpty])} }
+    else if command.contains("workflow-paste") { key(9,flags:.maskCommand);workflowLater(0.45){output(["type":"pasted","restored":field.stringValue.contains("CONTROLLED-TYPING-SECRET")])} }
+    else if command.contains("workflow-shortcut") { key(1,flags:.maskCommand);output(["type":"shortcut-sent"]) }
     else if command.contains("workflow-right") { let rect=screen(button.frame);press(CGPoint(x:rect.midX,y:rect.midY),right:true){output(["type":"right-sent"])} }
     else if command.contains("workflow-escape") { key(53);output(["type":"escape-sent"]) }
     else if command.contains("workflow-scroll"),let scroll=workflowScroll {

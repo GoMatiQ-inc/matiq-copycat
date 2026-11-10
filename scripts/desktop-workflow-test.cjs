@@ -26,13 +26,9 @@ async function main(){
     launched={app,editor,library:path.join(profile,'guides')};
    }
    editor=launched.editor;appOwned=captureTree(capture(launched.app.process()));
-   await editor.getByRole('button',{name:'New guide',exact:true}).click();
-   await editor.getByLabel('Guide title',{exact:true}).fill('Desktop workflow integration fixture');
-   await editor.getByRole('button',{name:'Save',exact:true}).click();
-   await editor.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
-   guideFile=path.join(launched.library,(await fs.readdir(launched.library)).find(f=>f.endsWith('.mqguide')));
-   await editor.getByRole('button',{name:'Start / resume desktop workflow',exact:true}).click();
+   await editor.locator('#new-record').click();
    await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
+   guideFile=path.join(launched.library,(await fs.readdir(launched.library)).find(f=>f.endsWith('.mqguide')));
    helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});
    assert.equal(helperOwned.length,1,'The actual app must own exactly one desktop recorder.');
   }else{
@@ -75,6 +71,10 @@ async function main(){
   await command('click','clicked');await count(++total);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
   await command('workflow-double','double-sent');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Double-click “Open settings”');
   const originBefore=project.guide.steps.length;await command('workflow-scroll');const scrolled=await nextFixture('scrolled');assert.notEqual(scrolled.origin,scrolled.before,'The actual native scroll view must move.');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Scroll to the required content');assert.equal(total,originBefore+1);
+  await command('workflow-edit-select','edit-selected');await count(total+=2);assert.equal(project.guide.steps.at(-1).instruction,'Select all');
+  await command('workflow-copy','copied');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Copy');
+  fixture.stdin.write('workflow-cut\n');const cut=await nextFixture('cut');assert.equal(cut.empty,true,'Actual Cut must change the selected field.');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Cut');
+  fixture.stdin.write('workflow-paste\n');const paste=await nextFixture('pasted');assert.equal(paste.restored,true,'Actual Paste must restore the controlled text.');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Paste');
   if(actualApp){
    const pid=helperOwned[0].pid;
    const source='var p=Application("System Events").processes.whose({unixId:'+pid+'})()[0];var items=[];for(var b of p.menuBars())items=items.concat(b.menuBarItems());var item=items.find(x=>{try{return String(x.name()).includes("Copycat");}catch{return false;}});if(!item)throw Error("Owned recording menu-bar item is missing.");item.click();delay(.2);item.menus[0].menuItems.byName("Pause recording").click();';
@@ -82,13 +82,13 @@ async function main(){
    await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));
    for(const row of helperOwned)await verifyStopped(row);helperOwned=[];
    const paused=JSON.parse(await fs.readFile(guideFile,'utf8'));await command('click','clicked');await wait(600);assert.deepEqual(JSON.parse(await fs.readFile(guideFile,'utf8')),paused,'Menu-bar pause must stop actual capture without changing saved work.');
-   await editor.getByRole('button',{name:'Start / resume desktop workflow',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
+   await editor.locator('#desktop-workflow').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
    helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});
    assert.equal(helperOwned.length,1);await command('click','clicked');await count(++total);
    await editor.getByRole('button',{name:'Stop capture',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
    for(const row of helperOwned)await verifyStopped(row);helperOwned=[];
    const preserved=JSON.parse(await fs.readFile(guideFile,'utf8'));
-   await editor.getByRole('button',{name:'Start / resume desktop workflow',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
+   await editor.locator('#desktop-workflow').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
    helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});
    assert.equal(helperOwned.length,1);await command('click','clicked');await count(total+1);
    await editor.getByRole('button',{name:'Cancel capture',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture cancelled'));
@@ -101,6 +101,7 @@ async function main(){
   await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,actualApp?'.validation/desktop-workflow-app-project.mqguide':'.validation/desktop-workflow-component-project.mqguide'),project);
   const oracle=path.join(temporary,'DesktopInspect');execFileSync('xcrun',['swiftc','-O','-target','arm64-apple-macos14.2','-module-cache-path',process.env.GUIDES_SWIFT_MODULE_CACHE||path.join(temporary,'modules'),path.join(root,'test/DesktopInspect.swift'),'-o',oracle],{timeout:120000,stdio:'pipe'});let pixels;try{pixels=JSON.parse(execFileSync(oracle,[file],{encoding:'utf8',timeout:30000}));}catch(error){throw Error('Desktop screenshot pixel inspection failed: '+String(error.stdout||error.message).trim());}assert.equal(pixels.passed,true);
   if(actualApp){
+   await editor.getByLabel('Guide title',{exact:true}).fill('Desktop workflow integration fixture');
    await editor.locator('#steps li button').first().click();
    await editor.getByLabel('Instruction',{exact:true}).fill('Reviewed desktop workflow instruction');
    await editor.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');await editor.getByRole('button',{name:'Apply region',exact:true}).click();
@@ -118,7 +119,7 @@ async function main(){
    project=await P.read(guideFile);assert.deepEqual(project,edited,'Actual application reopen preserves the edited guide, annotations, identities and original assets.');
    await P.atomicWrite(path.join(root,'.validation/desktop-workflow-app-project.mqguide'),project);
   }
-  proof={passed:true,scope:actualApp?(launched.candidate?'Actual signed packaged desktop workflow; application approvals controlled':'SDK desktop integration development only, not signed packaged qualification'):'Development native component only, not signed packaged qualification',form:actualApp?(launched.suite?'suite':'standalone'):'component',packaged:!!launched?.candidate,tool:launched?.candidate?.version,suiteVersion:launched?.suiteVersion,menuBarPauseVerified:actualApp,uiEditRedactExitReopenVerified:actualApp,browserVersion,electron:actualApp?await launched.app.evaluate(()=>process.versions.electron):undefined,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,browserWindowVerified:!!process.env.GUIDES_TEST_CHROMIUM,source:launched?.candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID,pixels,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows',actualApp?'UI edit and redaction, Save, normal application quit and actual reopen preserve identities, ordering, annotations and assets':'editable file save/reopen preserves steps and assets']};
+  proof={passed:true,scope:actualApp?(launched.candidate?'Actual signed packaged desktop workflow; application approvals controlled':'SDK desktop integration development only, not signed packaged qualification'):'Development native component only, not signed packaged qualification',form:actualApp?(launched.suite?'suite':'standalone'):'component',packaged:!!launched?.candidate,tool:launched?.candidate?.version,suiteVersion:launched?.suiteVersion,menuBarPauseVerified:actualApp,uiEditRedactExitReopenVerified:actualApp,browserVersion,electron:actualApp?await launched.app.evaluate(()=>process.versions.electron):undefined,runtime:require('@matiq-solutions/runtime/package.json').version,shell:require('@matiq-solutions/shell/package.json').version,browserWindowVerified:!!process.env.GUIDES_TEST_CHROMIUM,source:launched?.candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID,pixels,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual Copy, Cut and Paste with verified field changes','typing and paste screenshots contain the resulting field text','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows',actualApp?'UI edit and redaction, Save, normal application quit and actual reopen preserve identities, ordering, annotations and assets':'editable file save/reopen preserves steps and assets']};
  }catch(error){primary=error;throw error;}finally{
   if(!proof){await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-failed-project.mqguide'),project);}
   const errors=[];for(const [label,operation] of [

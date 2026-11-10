@@ -505,7 +505,9 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             guard var action = snapshot(focusPoint,action:"shortcut") else { return }
             action.event["shortcut"] = shortcut
             action.event.removeValue(forKey:"target")
-            pending = action;flush();return
+            pending = action
+            if ["paste","cut","undo","redo"].contains(shortcut) { schedule(0.3) } else { flush() }
+            return
         }
         // One generic burst; normal typed characters and values are never inspected.
         let actionName = editable ? "fill":"keyboard"
@@ -525,7 +527,9 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     func flush() {
         pendingTimer?.invalidate();pendingTimer = nil
         guard var action = pending else { return };pending = nil
-        if action.event["action"] as? String == "scroll",let current = frames.first(where:{ $0.display.frame == action.frame }),let image = current.image { action.image = image }
+        let kind = action.event["action"] as? String ?? ""
+        let changesContent = ["scroll","fill","keyboard"].contains(kind) || (kind == "shortcut" && ["paste","cut","undo","redo"].contains(action.event["shortcut"] as? String ?? ""))
+        if changesContent,let current = frames.first(where:{ $0.display.frame == action.frame }),let image = current.image { action.image = image }
         let bitmap = NSBitmapImageRep(cgImage:action.image)
         var encoded: Data?
         for quality in [0.95,0.8,0.65,0.45] {
