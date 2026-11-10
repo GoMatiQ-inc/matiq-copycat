@@ -155,8 +155,6 @@ exports.activate = async host => {
       if(name==='desktop-workflow'){
         if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Create and save a guide before recording.');
         if(activeCapture()&&!(current.capture.source==='desktop'&&current.capture.phase==='paused'))throw Error('Stop the current capture before recording the desktop.');
-        const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Record a workflow across your desktop?',detail:'Record interactions across applications, browser windows, menus and dialogs on all connected screens. A small temporary frame buffer is kept only while recording. Step text never includes raw typing, passwords or clipboard contents. Screenshot pixels may contain secrets: review and redact before sharing. Browser extension capture cannot run at the same time, preventing duplicate steps.',buttons:['Cancel','Start recording'],cancelId:0,defaultId:0});
-        if(choice.response!==1)return snapshot();
         await captureWrite(activeCapture()?C.transition(current,'resume'):C.begin(current,'desktop'));
         try{await startDesktop({id:0,pid:0});}catch(error){await captureWrite(C.transition(current,'pause',error.message));throw error;}
         notify();return snapshot();
