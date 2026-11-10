@@ -43,6 +43,18 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout A
     var owner: pid_t = 0
     guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return [:] }
     let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item", "AXMenuBarItem": "menu"]
+    var actionable = element
+    for _ in 0..<5 {
+        if roles[text(actionable,kAXRoleAttribute as CFString)] != nil { break }
+        var parent: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(actionable,kAXParentAttribute as CFString,&parent) == .success,
+              let parent = parent,CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+        let next = parent as! AXUIElement
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(next,&owner) == .success,owner == pid else { break }
+        actionable = next
+    }
+    let element = roles[text(actionable,kAXRoleAttribute as CFString)] != nil ? actionable:element
     let role = text(element, kAXRoleAttribute as CFString)
     var windowValue: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowValue) == .success,
@@ -418,6 +430,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         let box: [String:Any] = target(point,pid:pid,frame:frame.display.frame,observedWindow:&observed)
         var event: [String:Any] = ["type":"step","at":Int64(Date().timeIntervalSince1970*1000),"source":"desktop","action":action,"application":application]
         for (key,value) in box { event[key] = value }
+        if box["control"] as? String == "control" { event.removeValue(forKey:"target") }
         // A small click marker remains accurate even for controls without an AX rectangle.
         if event["target"] == nil {
             let rect = frame.display.frame

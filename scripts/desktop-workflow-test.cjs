@@ -67,7 +67,7 @@ async function main(){
    await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Controlled desktop browser fixture</title><style>body{padding:60px}button{font:24px sans-serif;padding:20px;background:magenta}</style><button onclick="window.clicked=true">Continue desktop workflow</button>');await page.goto(require('node:url').pathToFileURL(file).href);await wait(700);
    const point=await page.getByRole('button',{name:'Continue desktop workflow',exact:true}).evaluate(b=>{const r=b.getBoundingClientRect();return {x:screenX+r.x+r.width/2,y:screenY+outerHeight-innerHeight+r.y+r.height/2};});
    await command('workflow-pointer|'+browserChild.pid+'|'+point.x+'|'+point.y,'pointer-sent');await page.waitForFunction(()=>window.clicked===true);await count(++total);
-   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.equal(project.guide.steps.at(-1).instruction,'Click “Continue desktop workflow”');
+   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.ok(['Click “Continue desktop workflow”','Click the control'].includes(project.guide.steps.at(-1).instruction),'Use a real accessible browser label or an editable generic instruction; never invent it.');
    browserOwned=captureTree(capture(browserChild));browserCrashOwned=crash.captureOwnedCrashHelpers({bundle,baseline,known:browserCrashOwned});
    await cleanupDesktop({app:{process:()=>browserChild,close:()=>browser.close()},owned:[...browserOwned,...browserCrashOwned]});browser=null;browserChild=null;browserOwned=[];browserCrashOwned=[];
   }
@@ -104,6 +104,7 @@ async function main(){
   const errors=[];for(const [label,operation] of [
    ['TextEdit',()=>textedit?.close()],
    ['Browser',()=>cleanupDesktop({app:browserChild?{process:()=>browserChild,close:()=>browser?.close()}:null,owned:[...browserOwned,...browserCrashOwned]})],
+   ['Cancel active app capture',async()=>{if(launched?.app){const state=await launched.editor.evaluate(()=>window.guides.request('state'));if(['recording','paused'].includes(state.project?.capture?.phase))await launched.editor.evaluate(()=>window.guides.request('capture-control','cancel'));}}],
    ['Application',()=>cleanupDesktop({app:launched?.app,owned:appOwned})],
    ['Recorder',()=>cleanupDesktop({app:helper?{process:()=>helper,close:async()=>{if(helper.exitCode===null){const done=once(helper,'exit');helper.stdin.end('stop\n');await done;}}}:null,owned:helperOwned})],
    ['Fixture',()=>cleanupDesktop({app:fixture?{process:()=>fixture,close:async()=>{if(fixture.exitCode===null){const done=once(fixture,'exit');fixture.stdin.end('quit\n');await done;}}}:null,owned:fixtureOwned})]

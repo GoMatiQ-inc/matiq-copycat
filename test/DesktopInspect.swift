@@ -5,7 +5,8 @@ import Vision
 let path=CommandLine.arguments[1]
 let value=try JSONSerialization.jsonObject(with:Data(contentsOf:URL(fileURLWithPath:path))) as! [String:Any]
 let guide=value["guide"] as! [String:Any],steps=guide["steps"] as! [[String:Any]],assets=value["assets"] as! [String:[String:Any]]
-let expected=[(0,"Open settings"),(1,"Workflow"),(2,"Open dialog"),(3,"Confirm dialog"),(9,"Context action")]
+var expected=[(0,"Open settings"),(1,"Workflow"),(2,"Open dialog"),(3,"Confirm dialog"),(9,"Context action")]
+if let index=steps.firstIndex(where:{ (($0["source"] as? [String:Any])?["application"] as? String ?? "").contains("Chrome") }) { expected.append((index,"Continue desktop workflow")) }
 var results:[[String:Any]]=[]
 for (index,label) in expected {
  let step=steps[index],asset=assets[step["asset"] as! String]!,bytes=Data(base64Encoded:asset["data"] as! String)!
