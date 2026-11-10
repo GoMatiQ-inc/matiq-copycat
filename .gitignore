@@ -11,3 +11,7 @@ __pycache__/
 
 native/guides-capture
 native/GuidesNativeFixture
+
+native/whisper-cli
+native/WHISPER-LICENSE
+native/speech-engine-build.json

@@ -60,4 +60,4 @@ async function start(host,id,pid,onEvent,onFailure,onControl){
  catch(error){expected=true;try{await process.stop();}catch(cleanup){throw Error(error.message+' Cleanup failed: '+cleanup.message);}throw error;}finally{clearTimeout(timer);}
  let stopPromise;return {stop:()=>{expected=true;return stopPromise??=(process.stop().catch(error=>{stopPromise=null;throw error;}));},exited:process.exited};
 }
-module.exports={list,start};
+module.exports={list,start,executable};

@@ -3,7 +3,7 @@
   "id": "com.matiq.guides",
   "name": "MatiQ Copycat",
   "description": "Capture, edit and export illustrated workflow guides locally.",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "sdk": 1,
   "dataVersion": 1,
   "runtime": "electron-45.2.3",
@@ -12,7 +12,9 @@
   ],
   "capabilities": [
     "files",
-    "computer"
+    "computer",
+    "microphone",
+    "network"
   ],
   "adapter": "src/tool.cjs",
   "workspace": "src/index.html",

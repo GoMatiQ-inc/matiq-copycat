@@ -1,7 +1,10 @@
+import {captureAudio,microphone} from './audio-capture.mjs';
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
+let voiceRecorder=null,voiceStarting=null,voiceStatus={};
 let updateState={enabled:false},captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,exportCleanup=false,busy=false,draftTimer=null,draftWrite=null;
-window.guidesDispose=()=>{clearTimeout(draftTimer);};
+window.guidesStopVoice=async()=>{if(voiceStarting)await voiceStarting.catch(()=>{});const owned=voiceRecorder;voiceRecorder=null;if(owned)await owned.stop();};
+window.guidesDispose=async()=>{clearTimeout(draftTimer);await window.guidesStopVoice();};
 window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
 window.guidesRender=async({step,asset})=>(await render(step,asset)).toDataURL('image/png');
@@ -15,10 +18,11 @@ function remember(){past.push(historySnapshot());if(past.length>20)past.shift();
 function mutation(fn){if(busy||captureStatus&&['recording','paused'].includes(captureStatus.phase))return;remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
 function drawUpdates(){const u=updateState;$('app-updates').hidden=!u.enabled;if(!u.enabled)return;$('update-status').textContent=['Current version '+u.current,u.offer?'Version '+u.offer.version+' · '+Math.ceil(u.offer.bytes/1024/1024)+' MiB':'',u.phase==='downloading'?u.progress+'%':'',u.detail].filter(Boolean).join(' — ');for(const [action,visible]of [['check',true],['download',u.phase==='available'],['restart',u.phase==='ready'],['cleanup',u.phase==='cleanup']]){const button=$('update-'+action);button.hidden=!visible;button.disabled=busy||exportCleanup||(action!=='cleanup'&&u.busy);}}
-function accept(result){if(result.updates)updateState=result.updates;if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
+function accept(result){if(result.updates)updateState=result.updates;voiceStatus=result.narration||{};if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;past=[];future=[];message(result.error);draw();}
 async function list(){rows=await request('list');drawLibrary();}
 function drawLibrary(){const target=$('guide-list');target.replaceChildren();const query=$('search').value.toLowerCase();for(const row of rows.filter(r=>(r.title+' '+r.description).toLowerCase().includes(query))){const button=document.createElement('button');button.className='guide-card';button.disabled=!!row.invalid;const title=document.createElement('strong');title.textContent=row.title;const detail=document.createElement('span');detail.textContent=`${row.steps} steps`;button.append(title,detail);button.onclick=()=>run(async()=>accept(await request('open',row.id)));target.append(button);}if(!target.childElementCount)target.textContent='No matching guides. Create a guide to begin.';}
-function draw(){drawContent();$('export-cleanup').hidden=!exportCleanup;if(busy||exportCleanup)document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);if(exportCleanup&&!busy)$('export-cleanup').disabled=false;drawUpdates();}
+function draw(){const activeCaptureVoice=captureStatus&&['recording','paused'].includes(captureStatus.phase);  $('voice').disabled=!!activeCaptureVoice; $('voice-retry').hidden=!project||!voiceStatus.error||!!activeCaptureVoice;$('voice-status').textContent=voiceStatus.error||(voiceStatus.downloading?'Downloading and verifying the local speech model…':voiceStatus.busy?'Transcribing on this Mac…':voiceStatus.active?'Microphone recording; speech stays on this Mac.':'Optional. Spoken context is added to the corresponding steps.');
+drawContent();$('voice-cancel-download').hidden=!voiceStatus.downloading;$('voice-cancel-download').disabled=!voiceStatus.downloading;$('export-cleanup').hidden=!exportCleanup;if(busy||exportCleanup)document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);if(exportCleanup&&!busy)$('export-cleanup').disabled=false;drawUpdates();if(voiceStatus.downloading)$('voice-cancel-download').disabled=false;}
 function drawContent(){
   $('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
   if(!project){drawLibrary();return;}
@@ -82,8 +86,18 @@ window.guides.subscribe(result=>{if(result.updateOnly){updateState=result.update
 for(const action of ['check','download','restart','cleanup'])$('update-'+action).onclick=()=>run(async()=>{updateState=await request('update-'+action);drawUpdates();});
 $('bridge-enable').onclick=()=>run(async()=>accept(await request('bridge-enable')));
 $('bridge-install').onclick=()=>run(async()=>{await request('bridge-install',$('bridge-browser').value);message('Native bridge registered. Load the matching browser extension explicitly, then connect and select this instance.');});
-$('new-record').onclick=()=>run(async()=>{accept(await request('new'));accept(await request('desktop-workflow'));});
-$('desktop-workflow').onclick=()=>run(async()=>accept(await request('desktop-workflow')));
+async function startRecording(create){
+ if($('voice').checked)await request('voice-prepare');
+ if(create)accept(await request('new'));accept(await request('desktop-workflow'));
+ if($('voice').checked&&captureStatus?.phase==='recording'){
+  voiceStarting=(async()=>{const job=await request('voice-begin',captureStatus.id),stream=await microphone(),at=Date.now();voiceRecorder=await captureAudio(stream,{chunkSeconds:15,maxSeconds:3600,onChunk:(sequence,wav)=>request('voice-chunk',{job:job.id,sequence,at:at+sequence*15000,wav}),onError:error=>{message(error);void request('voice-error','input').catch(message);void window.guidesStopVoice().catch(message);},onLimit:()=>{void request('voice-error','limit').catch(message);message('Narration reached one hour. Stop this guide and begin another recording.');void window.guidesStopVoice().catch(message);}});})();
+  try{await voiceStarting;}catch(error){await request('voice-error','input');throw error;}finally{voiceStarting=null;}
+ }
+}
+$('new-record').onclick=()=>run(()=>startRecording(true));
+$('desktop-workflow').onclick=()=>run(()=>startRecording(false));
+$('voice-retry').onclick=()=>run(async()=>accept(await request('voice-retry')));
+$('voice-cancel-download').onclick=()=>request('voice-cancel-download').catch(message);
 $('desktop-list').onclick=()=>run(async()=>{const windows=await request('desktop-list');const select=$('desktop-window');select.replaceChildren();for(const window of windows){const option=document.createElement('option');option.value=window.id;option.textContent=window.application+' — '+window.title;select.append(option);}if(!windows.length)message('No supported windows selected. Open a desktop application, then refresh the window list.');});
 $('desktop-start').onclick=()=>run(async()=>accept(await request('desktop-start',Number($('desktop-window').value))));
 for(const command of ['pause','resume','stop','cancel'])$('capture-'+command).onclick=()=>run(async()=>accept(await request('capture-control',command)));
