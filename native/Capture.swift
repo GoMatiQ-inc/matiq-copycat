@@ -272,7 +272,6 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     let context = CIContext(options: [.cacheIntermediates: false])
     var stream: SCStream?
     var image: CGImage?
-    var at: Int64 = 0
     var stopped = false
     var failed: (() -> Void)?
     init(display: SCDisplay) { self.display = display }
@@ -297,11 +296,10 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             guard !stopped, type == .screen, CMSampleBufferIsValid(sampleBuffer),
                   let items = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
                   let raw = items.first?[.status] as? Int, let status = SCFrameStatus(rawValue:raw) else { return }
-            if status == .idle { if image != nil { at = Int64(Date().timeIntervalSince1970*1000) }; return }
+            if status == .idle { return }
             guard status == .complete, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { image = nil; return }
             let source = CIImage(cvPixelBuffer:buffer)
             image = context.createCGImage(source, from:source.extent)
-            at = Int64(Date().timeIntervalSince1970*1000)
         }
     }
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
@@ -416,8 +414,8 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     }
     func snapshot(_ point: CGPoint, action: String) -> Action? {
         guard !stopped, let frame = frames.first(where: { $0.display.frame.contains(point) }),
-              let image = frame.image, Int64(Date().timeIntervalSince1970*1000)-frame.at <= 1000 else {
-            stop("A recent desktop frame is unavailable. The action was not captured; review it and explicitly resume."); return nil
+              let image = frame.image else {
+            stop("A desktop frame is unavailable. The action was not captured; review it and explicitly resume."); return nil
         }
         var found: AXUIElement?
         let hit = AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(),Float(point.x),Float(point.y),&found)
