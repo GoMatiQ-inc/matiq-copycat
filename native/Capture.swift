@@ -317,7 +317,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
 @MainActor final class WorkflowRecorder: NSObject {
     struct Action {
         var event: [String:Any]
-        let image: CGImage
+        var image: CGImage
         let frame: CGRect
         let point: CGPoint
     }
@@ -353,7 +353,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
                 try await Task.sleep(nanoseconds:100_000_000)
             }
             guard frames.allSatisfy({ $0.image != nil }) else { stop("Desktop frames did not become available. Check Screen Recording permission and retry."); return }
-            let mask: NSEvent.EventTypeMask = [.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.leftMouseDragged,.keyDown]
+            let mask: NSEvent.EventTypeMask = [.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.leftMouseDragged,.scrollWheel,.keyDown]
             monitor = NSEvent.addGlobalMonitorForEvents(matching:mask) { [weak self] event in self?.observe(event) }
             guard monitor != nil else { stop("Desktop interaction observation could not start. Check Accessibility permission and retry."); return }
             let center = NSWorkspace.shared.notificationCenter
@@ -460,6 +460,11 @@ let geometryWarning = "The selected window moved or resized while its screenshot
                 } else { action.event["reviewTarget"] = true }
             } else if event.clickCount == 2 { action.event["action"] = "double-click" }
             pending = action;schedule(0.3)
+        case .scrollWheel:
+            if pending?.event["action"] as? String != "scroll" { flush() }
+            guard let point = event.cgEvent?.location, var action = snapshot(point,action:"scroll") else { return }
+            action.event.removeValue(forKey:"label");action.event.removeValue(forKey:"target")
+            pending = action;schedule(0.45)
         case .keyDown:
             keyboard(event)
         default: break
@@ -520,6 +525,7 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     func flush() {
         pendingTimer?.invalidate();pendingTimer = nil
         guard var action = pending else { return };pending = nil
+        if action.event["action"] as? String == "scroll",let current = frames.first(where:{ $0.display.frame == action.frame }),let image = current.image { action.image = image }
         let bitmap = NSBitmapImageRep(cgImage:action.image)
         var encoded: Data?
         for quality in [0.95,0.8,0.65,0.45] {

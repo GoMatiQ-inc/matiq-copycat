@@ -33,6 +33,7 @@ let app=NSApplication.shared
 app.setActivationPolicy(.regular)
 let action=Actions()
 var otherWindow: NSWindow?
+var workflowScroll:NSScrollView?
 let window=NSWindow(contentRect:NSRect(x:220,y:220,width:560,height:340),styleMask:[.titled,.closable],backing:.buffered,defer:false)
 window.isReleasedWhenClosed=false
 window.title="MatiQ Copycat Native Fixture"
@@ -52,6 +53,7 @@ if ProcessInfo.processInfo.environment["GUIDES_TEST_DESKTOP_WORKFLOW"] == "1" {
  let workflow=NSMenuItem(title:"Workflow",action:nil,keyEquivalent:"");let actions=NSMenu(title:"Workflow")
  for (title,key) in [("Open dialog",""),("Save","s")] { let item=NSMenuItem(title:title,action:#selector(Actions.menuSelected(_:)),keyEquivalent:key);item.target=action;actions.addItem(item) }
  workflow.submenu=actions;menu.addItem(workflow);app.mainMenu=menu
+ let scroll=NSScrollView(frame:NSRect(x:470,y:20,width:70,height:100));let document=NSView(frame:NSRect(x:0,y:0,width:70,height:800));document.wantsLayer=true;document.layer?.backgroundColor=NSColor.orange.cgColor;scroll.documentView=document;scroll.hasVerticalScroller=true;window.contentView!.addSubview(scroll);workflowScroll=scroll
  let context=NSMenu();let item=NSMenuItem(title:"Context action",action:#selector(Actions.menuSelected(_:)),keyEquivalent:"");item.target=action;context.addItem(item);button.menu=context
 }
 func screen(_ rect: NSRect) -> CGRect {
@@ -122,6 +124,13 @@ FileHandle.standardInput.readabilityHandler={ handle in
     } else if command.contains("workflow-shortcut") { key(1,flags:.maskCommand);output(["type":"shortcut-sent"]) }
     else if command.contains("workflow-right") { let rect=screen(button.frame);press(CGPoint(x:rect.midX,y:rect.midY),right:true){output(["type":"right-sent"])} }
     else if command.contains("workflow-escape") { key(53);output(["type":"escape-sent"]) }
+    else if command.contains("workflow-scroll"),let scroll=workflowScroll {
+     let rect=screen(scroll.frame),point=CGPoint(x:rect.midX,y:rect.midY)
+     for n in 0...3 { workflowLater(Double(n)*0.1){
+      let event=CGEvent(scrollWheelEvent2Source:CGEventSource(stateID:.hidSystemState),units:.pixel,wheelCount:1,wheel1:-100,wheel2:0,wheel3:0)!;event.location=point;event.post(tap:.cgSessionEventTap)
+     }}
+     workflowLater(0.7){output(["type":"scrolled","origin":scroll.contentView.bounds.minY])}
+    }
     else if command.contains("workflow-double") {
      let rect=screen(button.frame),p=CGPoint(x:rect.midX,y:rect.midY),source=CGEventSource(stateID:.hidSystemState)
      for n in 0...1 { workflowLater(Double(n)*0.15){

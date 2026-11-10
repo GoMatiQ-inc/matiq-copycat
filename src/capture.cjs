@@ -14,6 +14,7 @@ function label(value){if(typeof value!=='string')return '';const cleaned=value.t
 function instruction(event){
  const control=label(event.label),noun=['button','link','checkbox','radio button','menu item','menu','field','dropdown'].includes(event.control)?event.control:'control';
  if(event.action==='navigate')return `Navigate to ${event.origin}`;
+ if(event.action==='scroll')return 'Scroll to the required content';
  if(event.action==='fill')return 'Enter the required information in the field';
  if(event.action==='select')return control?`Choose an option in “${control}”`:'Choose an option in the dropdown';
  if(event.action==='toggle')return control?`Change “${control}”`:`Change the ${noun}`;
@@ -53,7 +54,7 @@ function append(project,event){
  if(event.source==='browser'){
   s.source={origin:P.httpOrigin(event.origin,'Browser context must be an HTTP(S) origin without paths or query data.')};
  }else{
-  if(!['click','right-click','double-click','drag','fill','shortcut'].includes(event.action)||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires an application and a supported interaction.');
+  if(!['click','right-click','double-click','drag','fill','scroll','shortcut'].includes(event.action)||typeof event.application!=='string'||!event.application.trim()||event.application.length>200)throw Error('Desktop capture requires an application and a supported interaction.');
   s.source={application:event.application};
  }
  s.instruction=instruction(event);
