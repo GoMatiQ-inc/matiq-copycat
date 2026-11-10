@@ -61,3 +61,15 @@ test('bounded warning retention keeps older gaps and explicitly reports overflow
 test('invalid captured origins fail with safe diagnostics and leave capture unchanged',()=>{const {inspect}=require('node:util'),p=C.begin(P.create()),before=JSON.stringify(p),canary='CONTROLLED-CAPTURE-SECRET';for(const origin of [canary,17,{input:canary},'https://example.com/?token='+canary]){assert.throws(()=>C.append(p,event(p,{origin})),error=>{assert.match(error.message,/HTTP\(S\) origin/);assert.ok(!inspect(error).includes(canary));assert.equal(error.input,undefined);assert.equal(error.cause,undefined);return true;});assert.equal(JSON.stringify(p),before);}});
 
 test('unverified native target is omitted and visibly requires manual review',()=>{const p=C.begin(P.create(),'desktop'),e=event(p,{source:'desktop',application:'Controlled native app',reviewTarget:true});const next=C.append(p,e).project;assert.deepEqual(next.guide.steps[0].annotations,[]);assert.match(next.capture.issues.join(' '),/highlight manually/);assert.throws(()=>C.append(p,{...e,reviewTarget:'yes'}),/review state/);});
+
+test('desktop workflow actions use bounded rule-based wording and never retain raw interaction values',()=>{
+ for(const [action,more,expected] of [
+  ['right-click',{},'Right-click “Settings”'],['double-click',{},'Double-click “Settings”'],['drag',{destination:{x:.6,y:.6,width:.02,height:.02}},'Drag “Settings” from callout 1 to callout 2'],
+  ['keyboard',{},'Complete the keyboard interaction (review this step)'],['shortcut',{shortcut:'space'},'Press Space'],['scroll',{},'Scroll to the required content'],['fill',{},'Enter the required information in the field'],['shortcut',{shortcut:'save'},'Save'],['shortcut',{shortcut:'paste'},'Paste']
+ ]){
+  const p=C.begin(P.create(),'desktop'),e=event(p,{source:'desktop',application:'Controlled desktop app',action,...more,typed:'CONTROLLED-RAW-SECRET',clipboard:'CONTROLLED-RAW-SECRET',value:'CONTROLLED-RAW-SECRET'});
+  const next=C.append(p,e).project;assert.equal(next.guide.steps[0].instruction,expected);assert.ok(!JSON.stringify(next).includes('CONTROLLED-RAW-SECRET'));
+ }
+ const p=C.begin(P.create(),'desktop');assert.throws(()=>C.append(p,event(p,{source:'desktop',application:'Controlled desktop app',action:'shortcut',shortcut:'CONTROLLED-RAW-SECRET'})),/Unsupported desktop shortcut/);
+ assert.equal(p.guide.steps.length,0);
+});

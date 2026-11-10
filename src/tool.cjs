@@ -87,7 +87,7 @@ exports.activate = async host => {
           const result=C.append(current,{...event,id:randomUUID(),session:capture.id,scope:capture.scope,sequence:capture.receipts.length});
           try{await captureWrite(result.project);}catch(error){current=result.project;stateRevision++;throw error;}
         }).catch(error=>{queueMicrotask(()=>desktopInterrupted(error));}).finally(()=>{desktopPending--;desktopPendingBytes-=bytes;notify();});
-      },desktopInterrupted);
+      },desktopInterrupted,command=>{void (async()=>{try{await stopDesktop();if(disposing||disposed)return;if(working)throw Error('Recording stopped from the menu bar. Finish the current operation, then use the capture controls.');working=true;try{await captureControl(command);}finally{await endWork();}}catch(error){desktopInterrupted(error);}})();});
     }catch(error){desktopAccepting=false;throw error;}
   }
   async function idle(){if(activeCapture())throw Error('Stop or cancel capture before switching guides.');if(dirty)throw Error('Save your guide before switching or closing it.');}
@@ -151,6 +151,13 @@ exports.activate = async host => {
         if(activeCapture()&&current.capture.phase==='recording')throw Error('Pause or stop capture before selecting another window.');
         const choice=await dialog.showMessageBox(host.window,{type:'info',message:'Select a desktop workflow window',detail:'Copycat will request Screen Recording permission to list windows. Recording starts only after you choose a window and approve it. Browser workflows use the extension instead.',buttons:['Cancel','Choose window'],cancelId:0,defaultId:0});
         desktopChoices=choice.response===1?await D.list(host):[];return desktopChoices;
+      }
+      if(name==='desktop-workflow'){
+        if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Create and save a guide before recording.');
+        if(activeCapture()&&!(current.capture.source==='desktop'&&current.capture.phase==='paused'))throw Error('Stop the current capture before recording the desktop.');
+        await captureWrite(activeCapture()?C.transition(current,'resume'):C.begin(current,'desktop'));
+        try{await startDesktop({id:0,pid:0});}catch(error){await captureWrite(C.transition(current,'pause',error.message));throw error;}
+        notify();return snapshot();
       }
       if(name==='desktop-start'){
         if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Create and save a guide before recording.');

@@ -1,6 +1,8 @@
 import AppKit
 import ScreenCaptureKit
 import ApplicationServices
+import CoreImage
+import CoreMedia
 
 // A mouse-only, selected-window recorder. Stdout is a private JSON-lines pipe.
 func send(_ value: [String: Any]) {
@@ -37,10 +39,22 @@ func text(_ element: AXUIElement, _ key: CFString) -> String {
 func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout AXUIElement?) -> [String: Any] {
     var found: AXUIElement?
     guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &found) == .success,
-          let element = found else { return [:] }
+          let hitElement = found else { return [:] }
     var owner: pid_t = 0
-    guard AXUIElementGetPid(element, &owner) == .success, owner == pid else { return [:] }
-    let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item"]
+    guard AXUIElementGetPid(hitElement, &owner) == .success, owner == pid else { return [:] }
+    let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item", "AXMenuBarItem": "menu"]
+    var actionable = hitElement
+    for _ in 0..<5 {
+        if roles[text(actionable,kAXRoleAttribute as CFString)] != nil { break }
+        var parent: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(actionable,kAXParentAttribute as CFString,&parent) == .success,
+              let parent = parent,CFGetTypeID(parent) == AXUIElementGetTypeID() else { break }
+        let next = parent as! AXUIElement
+        var owner: pid_t = 0
+        guard AXUIElementGetPid(next,&owner) == .success,owner == pid else { break }
+        actionable = next
+    }
+    let element = roles[text(actionable,kAXRoleAttribute as CFString)] != nil ? actionable:hitElement
     let role = text(element, kAXRoleAttribute as CFString)
     var windowValue: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowValue) == .success,
@@ -252,20 +266,295 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     }
 }
 
+
+@MainActor final class DesktopFrame: NSObject, SCStreamOutput, SCStreamDelegate {
+    let display: SCDisplay
+    let context = CIContext(options: [.cacheIntermediates: false])
+    var stream: SCStream?
+    var image: CGImage?
+    var stopped = false
+    var failed: (() -> Void)?
+    init(display: SCDisplay) { self.display = display }
+    func start(excluding applications: [SCRunningApplication]) async throws {
+        let filter = SCContentFilter(display: display, excludingApplications: applications, exceptingWindows: [])
+        let config = SCStreamConfiguration()
+        let ratio = min(1, 2000 / CGFloat(max(display.width,display.height)))
+        config.width = max(1,Int(CGFloat(display.width)*ratio))
+        config.height = max(1,Int(CGFloat(display.height)*ratio))
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 10)
+        config.queueDepth = 3
+        config.pixelFormat = kCVPixelFormatType_32BGRA
+        config.showsCursor = false
+        config.capturesAudio = false
+        let owned = SCStream(filter: filter, configuration: config, delegate: self)
+        stream = owned
+        try owned.addStreamOutput(self, type: .screen, sampleHandlerQueue: .main)
+        try await owned.startCapture()
+    }
+    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        MainActor.assumeIsolated {
+            guard !stopped, type == .screen, CMSampleBufferIsValid(sampleBuffer),
+                  let items = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+                  let raw = items.first?[.status] as? Int, let status = SCFrameStatus(rawValue:raw) else { return }
+            if status == .idle { return }
+            guard status == .complete, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { image = nil; return }
+            let source = CIImage(cvPixelBuffer:buffer)
+            image = context.createCGImage(source, from:source.extent)
+        }
+    }
+    nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
+        Task { @MainActor in if !self.stopped { self.image = nil; self.failed?() } }
+    }
+    func stop() async throws {
+        stopped = true
+        image = nil
+        if let stream = stream { try await stream.stopCapture(); self.stream = nil }
+    }
+}
+
+@MainActor final class WorkflowRecorder: NSObject {
+    struct Action {
+        var event: [String:Any]
+        var image: CGImage
+        let frame: CGRect
+        let point: CGPoint
+    }
+    var frames: [DesktopFrame] = []
+    var monitor: Any?
+    var observers: [NSObjectProtocol] = []
+    var screenObserver: NSObjectProtocol?
+    var permissionTimer: Timer?
+    var pendingTimer: Timer?
+    var pending: Action?
+    var gesture: Action?
+    var dragged = false
+    var stopped = false
+    var statusItem: NSStatusItem?
+    let owner = getppid()
+
+    func start() async {
+        do {
+            let available = try await SCShareableContent.excludingDesktopWindows(false,onScreenWindowsOnly:true)
+            guard !available.displays.isEmpty, available.displays.count <= 8 else { stop("Desktop recording supports one to eight screens. Adjust the display setup and resume."); return }
+            let excluded = available.applications.filter { $0.processID == owner || $0.processID == getpid() }
+            for display in available.displays {
+                let frame = DesktopFrame(display:display)
+                frame.failed = { [weak self] in self?.stop("The desktop screen stream ended. Check Screen Recording permission and explicitly resume.") }
+                frames.append(frame)
+                if stopped { return }
+                try await frame.start(excluding:excluded)
+                if stopped { return }
+            }
+            for _ in 0..<30 {
+                if stopped { return }
+                if frames.allSatisfy({ $0.image != nil }) { break }
+                try await Task.sleep(nanoseconds:100_000_000)
+            }
+            guard frames.allSatisfy({ $0.image != nil }) else { stop("Desktop frames did not become available. Check Screen Recording permission and retry."); return }
+            let mask: NSEvent.EventTypeMask = [.leftMouseDown,.leftMouseUp,.rightMouseDown,.rightMouseUp,.leftMouseDragged,.scrollWheel,.keyDown]
+            monitor = NSEvent.addGlobalMonitorForEvents(matching:mask) { [weak self] event in self?.observe(event) }
+            guard monitor != nil else { stop("Desktop interaction observation could not start. Check Accessibility permission and retry."); return }
+            let center = NSWorkspace.shared.notificationCenter
+            for name in [NSWorkspace.willSleepNotification,NSWorkspace.screensDidSleepNotification,NSWorkspace.sessionDidResignActiveNotification] {
+                observers.append(center.addObserver(forName:name,object:nil,queue:.main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.stop("The Mac slept or locked. Recording stopped; explicitly resume when ready.") }
+                })
+            }
+            let displays = displaySignature()
+            screenObserver = NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main) { [weak self] _ in
+                MainActor.assumeIsolated { if displaySignature() != displays { self?.stop("Display configuration changed. Recording stopped; review screenshots and explicitly resume.") } }
+            }
+            permissionTimer = Timer.scheduledTimer(withTimeInterval:1,repeats:true) { [weak self] _ in
+                MainActor.assumeIsolated { if !CGPreflightScreenCaptureAccess() || !AXIsProcessTrusted() { self?.stop("Screen Recording or Accessibility permission was revoked. Restore it before resuming.") } }
+            }
+            FileHandle.standardInput.readabilityHandler = { [weak self] handle in
+                _ = handle.availableData
+                Task { @MainActor in self?.stop() }
+            }
+            let item = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
+            item.button?.title = "● Copycat"
+            item.button?.setAccessibilityLabel("Copycat is recording the desktop")
+            let menu = NSMenu()
+            for (title,selector) in [("Pause recording",#selector(pause)),("Finish guide",#selector(finish)),("Cancel capture",#selector(cancel))] {
+                let row = NSMenuItem(title:title,action:selector,keyEquivalent:"");row.target = self;menu.addItem(row)
+            }
+            item.menu = menu;statusItem = item
+            send(["type":"ready","window":0,"application":"Desktop workflow"])
+        } catch { stop("Desktop recording could not start. Check screen and Accessibility permissions, then retry.") }
+    }
+    @objc func pause() { control("pause") }
+    @objc func finish() { control("stop") }
+    @objc func cancel() { control("cancel") }
+    func control(_ command: String) {
+        stop(nil,command:command)
+    }
+    func stop(_ reason: String? = nil, command: String? = nil) {
+        guard !stopped else { return }
+        stopped = true
+        if let monitor = monitor { NSEvent.removeMonitor(monitor) };monitor = nil
+        permissionTimer?.invalidate();permissionTimer = nil
+        pendingTimer?.invalidate();pendingTimer = nil
+        if command != "cancel" { flush() };pending = nil;gesture = nil
+        for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) };observers = []
+        if let observer = screenObserver { NotificationCenter.default.removeObserver(observer) };screenObserver = nil
+        statusItem?.button?.title = "Stopping Copycat…"
+        statusItem?.menu = nil
+        for frame in frames { frame.stopped = true;frame.image = nil }
+        if let reason = reason { send(["type":"issue","reason":reason]) }
+        if let command = command { send(["type":"control","command":command]) }
+        Task { @MainActor in
+            var failed = false
+            for frame in frames { do { try await frame.stop() } catch { failed = true } }
+            frames = []
+            if let item = statusItem { NSStatusBar.system.removeStatusItem(item) };statusItem = nil
+            if failed { send(["type":"issue","reason":"A desktop screen stream failed to stop cleanly. Retry capture cleanup before closing."]) }
+            send(["type":"stopped"])
+            exit(failed || reason != nil ? 1:0)
+        }
+    }
+    func snapshot(_ point: CGPoint, action: String) -> Action? {
+        guard !stopped, let frame = frames.first(where: { $0.display.frame.contains(point) }),
+              let image = frame.image else {
+            stop("A desktop frame is unavailable. The action was not captured; review it and explicitly resume."); return nil
+        }
+        var found: AXUIElement?
+        let hit = AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(),Float(point.x),Float(point.y),&found)
+        var pid = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+        if hit == .success, let element = found { _ = AXUIElementGetPid(element,&pid) }
+        guard pid != owner, pid != getpid(), pid > 0 else { return nil }
+        let running = NSRunningApplication(processIdentifier:pid)
+        let application = String((running?.localizedName ?? running?.bundleIdentifier ?? "Application").prefix(200))
+        var observed: AXUIElement?
+        let box: [String:Any] = target(point,pid:pid,frame:frame.display.frame,observedWindow:&observed)
+        var event: [String:Any] = ["type":"step","at":Int64(Date().timeIntervalSince1970*1000),"source":"desktop","action":action,"application":application]
+        for (key,value) in box { event[key] = value }
+        if box["control"] as? String == "control" { event.removeValue(forKey:"target") }
+        // A small click marker remains accurate even for controls without an AX rectangle.
+        if event["target"] == nil {
+            let rect = frame.display.frame
+            let width = min(16,rect.width),height = min(16,rect.height)
+            event["target"] = ["x":max(0,min(rect.width-width,point.x-rect.minX-width/2))/rect.width,"y":max(0,min(rect.height-height,point.y-rect.minY-height/2))/rect.height,"width":width/rect.width,"height":height/rect.height]
+        }
+        return Action(event:event,image:image,frame:frame.display.frame,point:point)
+    }
+    func observe(_ event: NSEvent) {
+        guard !stopped else { return }
+        switch event.type {
+        case .leftMouseDown,.rightMouseDown:
+            // Preserve a typing burst before the next independently observed action.
+            if pending?.event["action"] as? String == "fill" { flush() }
+            if event.clickCount != 2 { flush() }
+            guard let point = event.cgEvent?.location else { return }
+            gesture = snapshot(point,action:event.type == .rightMouseDown ? "right-click":"click")
+            dragged = false
+        case .leftMouseDragged: dragged = true
+        case .leftMouseUp,.rightMouseUp:
+            guard var action = gesture else { return };gesture = nil
+            if dragged {
+                action.event["action"] = "drag"
+                action.event["target"] = ["x":max(0,min(0.98,(action.point.x-action.frame.minX)/action.frame.width-0.01)),"y":max(0,min(0.98,(action.point.y-action.frame.minY)/action.frame.height-0.01)),"width":0.02,"height":0.02]
+                if let end = event.cgEvent?.location, action.frame.contains(end) {
+                    action.event["destination"] = ["x":max(0,min(0.98,(end.x-action.frame.minX)/action.frame.width-0.01)),"y":max(0,min(0.98,(end.y-action.frame.minY)/action.frame.height-0.01)),"width":0.02,"height":0.02]
+                } else { action.event["reviewTarget"] = true }
+            } else if event.clickCount == 2 { action.event["action"] = "double-click" }
+            pending = action;schedule(0.3)
+        case .scrollWheel:
+            if pending?.event["action"] as? String != "scroll" { flush() }
+            guard let point = event.cgEvent?.location, var action = snapshot(point,action:"scroll") else { return }
+            action.event.removeValue(forKey:"label");action.event.removeValue(forKey:"target")
+            pending = action;schedule(0.45)
+        case .keyDown:
+            keyboard(event)
+        default: break
+        }
+    }
+    func keyboard(_ event: NSEvent) {
+        guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != owner, app.processIdentifier != getpid() else { return }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        var focused: CFTypeRef?
+        _ = AXUIElementCopyAttributeValue(AXUIElementCreateApplication(app.processIdentifier),kAXFocusedUIElementAttribute as CFString,&focused)
+        var focusPoint = event.cgEvent?.location ?? CGPoint.zero
+        if let focused = focused, CFGetTypeID(focused) == AXUIElementGetTypeID() {
+            let element = focused as! AXUIElement
+            var position: CFTypeRef?,size: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element,kAXPositionAttribute as CFString,&position) == .success,
+               AXUIElementCopyAttributeValue(element,kAXSizeAttribute as CFString,&size) == .success,
+               let position = position,let size = size,CFGetTypeID(position) == AXValueGetTypeID(),CFGetTypeID(size) == AXValueGetTypeID() {
+                var origin = CGPoint.zero,dimensions = CGSize.zero
+                AXValueGetValue(position as! AXValue,.cgPoint,&origin);AXValueGetValue(size as! AXValue,.cgSize,&dimensions)
+                focusPoint = CGPoint(x:origin.x+dimensions.width/2,y:origin.y+dimensions.height/2)
+            }
+        }
+        let focusedElement = focused.flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement):nil }
+        let editable = focusedElement.map { ["AXTextField","AXTextArea","AXComboBox"].contains(text($0,kAXRoleAttribute as CFString)) } ?? false
+        var shortcut: String?
+        if flags.contains(.command) || flags.contains(.control) {
+            // Read a command key only while Command is held; never inspect normal typed characters.
+            let commands = ["c":"copy","v":"paste","x":"cut","s":"save","z":flags.contains(.shift) ? "redo":"undo","a":"all","f":"find","o":"open","n":"new","w":"close"]
+            let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            let recognized = flags.contains(.command) && !flags.contains(.control) && !flags.contains(.option) && (!flags.contains(.shift) || key == "z")
+            shortcut = recognized ? (commands[key] ?? "manual"):"manual"
+        } else {
+            shortcut = [36:"confirm",76:"confirm",53:"cancel",48:flags.contains(.shift) ? "previous":"next"][Int(event.keyCode)]
+            if !editable { shortcut = shortcut ?? [49:"space",51:"delete",117:"delete",123:"left",124:"right",125:"down",126:"up",115:"home",119:"end",116:"page-up",121:"page-down"][Int(event.keyCode)] }
+        }
+        if let shortcut = shortcut {
+            flush()
+            guard var action = snapshot(focusPoint,action:"shortcut") else { return }
+            action.event["shortcut"] = shortcut
+            action.event.removeValue(forKey:"target")
+            pending = action
+            if ["paste","cut","undo","redo"].contains(shortcut) { schedule(0.3) } else { flush() }
+            return
+        }
+        // One generic burst; normal typed characters and values are never inspected.
+        let actionName = editable ? "fill":"keyboard"
+        if pending?.event["action"] as? String != actionName {
+            flush()
+            guard var action = snapshot(focusPoint,action:actionName) else { return }
+            action.event.removeValue(forKey:"label")
+            if !editable { action.event.removeValue(forKey:"target") }
+            pending = action
+        }
+        schedule(0.7)
+    }
+    func schedule(_ interval: TimeInterval) {
+        pendingTimer?.invalidate()
+        pendingTimer = Timer.scheduledTimer(withTimeInterval:interval,repeats:false) { [weak self] _ in MainActor.assumeIsolated { self?.flush() } }
+    }
+    func flush() {
+        pendingTimer?.invalidate();pendingTimer = nil
+        guard var action = pending else { return };pending = nil
+        let kind = action.event["action"] as? String ?? ""
+        let changesContent = ["scroll","fill","keyboard"].contains(kind) || (kind == "shortcut" && ["paste","cut","undo","redo"].contains(action.event["shortcut"] as? String ?? ""))
+        if changesContent,let current = frames.first(where:{ $0.display.frame == action.frame }),let image = current.image { action.image = image }
+        let bitmap = NSBitmapImageRep(cgImage:action.image)
+        var encoded: Data?
+        for quality in [0.95,0.8,0.65,0.45] {
+            if let bytes = bitmap.representation(using:.jpeg,properties:[.compressionFactor:quality]),bytes.count <= 700000 { encoded = bytes;break }
+        }
+        guard let encoded = encoded else { send(["type":"issue","reason":"A desktop screenshot exceeds the capture limit. The action is missing; review it before sharing."]);if !stopped { stop() };return }
+        action.event["image"] = ["mediaType":"image/jpeg","data":encoded.base64EncodedString()]
+        send(action.event)
+    }
+}
+
 let args = CommandLine.arguments
 if args.count == 2 && args[1] == "probe" {
     send(["type": "permissions", "screen": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()])
     exit(0)
 }
-guard args.count >= 2, ["list","record"].contains(args[1]) else { fail("Use list, probe, or record with the selected window ID.") }
+guard args.count >= 2, ["list","record","record-desktop"].contains(args[1]) else { fail("Use list, probe, or record with the selected window ID.") }
 guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else { fail("Screen Recording permission is required. In System Settings → Privacy & Security → Screen Recording, enable the application named in the macOS permission request, then quit and reopen it before retrying.") }
-let recording = args[1] == "record"
+let recording = args[1] == "record" || args[1] == "record-desktop"
 if recording && !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary) {
     fail("Accessibility permission is required for control labels. In System Settings → Privacy & Security → Accessibility, enable the application named in the macOS permission request, then retry.")
 }
-NSApplication.shared.setActivationPolicy(.prohibited)
+NSApplication.shared.setActivationPolicy(args[1] == "record-desktop" ? .accessory:.prohibited)
 var recorder: Recorder?
+var workflowRecorder: WorkflowRecorder?
 Task { @MainActor in
+    if args[1] == "record-desktop" { workflowRecorder = WorkflowRecorder();await workflowRecorder!.start();return }
     do {
         let available = try await content()
         let windows = available.windows.filter(permitted)
