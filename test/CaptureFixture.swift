@@ -73,7 +73,10 @@ FileHandle.standardInput.readabilityHandler={ handle in
  fixtureMain {
   if data.isEmpty||command.contains("quit")||command.contains("stop"){ app.terminate(nil) }
   else if ProcessInfo.processInfo.environment["GUIDES_TEST_DESKTOP_WORKFLOW"] == "1" && command.contains("workflow-") {
-   app.activate(ignoringOtherApps:true)
+   if command.hasPrefix("workflow-pointer|") {
+    let parts=command.trimmingCharacters(in:.whitespacesAndNewlines).split(separator:"|")
+    if parts.count == 4,let pid=Int32(parts[1]) { NSRunningApplication(processIdentifier:pid)?.activate(options:[]) }
+   } else { app.activate(ignoringOtherApps:true) }
    func attribute(_ element:AXUIElement,_ name:CFString)->CFTypeRef? { var value:CFTypeRef?;return AXUIElementCopyAttributeValue(element,name,&value) == .success ? value:nil }
    func children(_ element:AXUIElement)->[AXUIElement] { attribute(element,kAXChildrenAttribute as CFString) as? [AXUIElement] ?? [] }
    func point(_ element:AXUIElement)->CGPoint? {
@@ -91,7 +94,11 @@ FileHandle.standardInput.readabilityHandler={ handle in
     for down in [true,false] { let event=CGEvent(keyboardEventSource:source,virtualKey:code,keyDown:down)!;event.flags=flags;event.post(tap:.cgSessionEventTap) }
    }
    workflowLater(0.35){
-    if command.contains("workflow-menu-open") || command.contains("workflow-menu-dialog") {
+    if command.hasPrefix("workflow-pointer|") {
+     let parts=command.trimmingCharacters(in:.whitespacesAndNewlines).split(separator:"|")
+     guard parts.count == 4,let x=Double(parts[2]),let y=Double(parts[3]),x.isFinite,y.isFinite else { output(["type":"fixture-error","reason":"Invalid owned browser pointer stimulus"]);return }
+     press(CGPoint(x:x,y:y)){output(["type":"pointer-sent"])}
+    } else if command.contains("workflow-menu-open") || command.contains("workflow-menu-dialog") {
      let own=AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
      guard let bar=attribute(own,kAXMenuBarAttribute as CFString) else { output(["type":"fixture-error","reason":"No native menu bar"]);return }
      let entries=children(bar as! AXUIElement)

@@ -4,9 +4,9 @@ const C=require('../src/capture.cjs'),P=require('../src/project.cjs'),root=path.
 async function main(){
  require('./native-test-isolation.cjs').assertNativeTestIsolation();assert.equal(process.platform,'darwin');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'copycat-desktop-workflow-'))),program=process.env.GUIDES_WORKFLOW_HELPER||path.join(root,'native/guides-capture');
- const actualApp=process.env.GUIDES_WORKFLOW_APP==='1';let launched,editor,appOwned=[],guideFile;
+ const actualApp=process.env.GUIDES_WORKFLOW_APP==='1';let launched,editor,appOwned=[],guideFile,browserChild,browser,browserOwned=[],browserCrashOwned=[];
  let fixture,helper,textedit,textEditPID,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null,primary=null;
- const timer=setTimeout(()=>{for(const child of [helper,fixture,launched?.app?.process()])if(child?.exitCode===null)child.kill('SIGTERM');},120000);
+ const timer=setTimeout(()=>{for(const child of [helper,fixture,launched?.app?.process(),browserChild])if(child?.exitCode===null)child.kill('SIGTERM');},120000);
  function channel(child,label){
   let tail='';const rows=[];child.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const row=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);rows.push(row);}});
   return async type=>{for(let i=0;i<300;i++){const error=rows.find(v=>['issue','fixture-error'].includes(v.type));if(error)throw Error(label+': '+error.reason);const at=rows.findIndex(v=>v.type===type);if(at>=0)return rows.splice(at,1)[0];if(child.exitCode!==null)throw Error(label+' exited before '+type);await new Promise(r=>setTimeout(r,50));}throw Error(label+' did not emit '+type);};
@@ -55,8 +55,24 @@ async function main(){
   await textedit.command('bold','clicked');await count(12);assert.ok(['TextEdit','com.apple.TextEdit'].includes(project.guide.steps.at(-1).source.application));
   await textedit.command('save','saved');await count(13);
   assert.ok(/\\b(?:\s|\\)/.test(await fs.readFile(textedit.document,'utf8')),'The actual TextEdit button must change saved formatting.');
-  const before=project.guide.steps.slice();await textedit.close();textedit=null;await command('click','clicked');await count(14);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
-  await command('workflow-double','double-sent');await count(15);assert.equal(project.guide.steps.at(-1).instruction,'Double-click “Open settings”');
+  let total=13;const before=project.guide.steps.slice();await textedit.close();textedit=null;
+  if(process.env.GUIDES_TEST_CHROMIUM){
+   const executable=process.env.GUIDES_TEST_CHROMIUM,bundle=executable.slice(0,executable.indexOf('.app/')+4),profile=path.join(temporary,'browser');
+   const crash=require('./browser-crash-fixture.cjs'),baseline=crash.crashHandlers(bundle);
+   browserChild=spawn(executable,['--user-data-dir='+profile,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-updater-scheduler','--disable-sync','--force-renderer-accessibility','about:blank'],{stdio:['ignore','ignore','ignore']});
+   browserOwned=captureTree(capture(browserChild));let port;
+   for(let i=0;i<200;i++){try{port=Number((await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0]);if(port)break;}catch{}if(browserChild.exitCode!==null)throw Error('Owned browser exited before its loopback inspector was ready.');await wait(50);}
+   assert.ok(port);browser=await require('playwright').chromium.connectOverCDP('http://127.0.0.1:'+port);
+   const context=browser.contexts()[0];await context.route(/^https?:/,route=>route.abort());const page=context.pages()[0]||await context.newPage();const file=path.join(temporary,'browser.html');
+   await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Controlled desktop browser fixture</title><style>body{padding:60px}button{font:24px sans-serif;padding:20px;background:magenta}</style><button onclick="window.clicked=true">Continue desktop workflow</button>');await page.goto(require('node:url').pathToFileURL(file).href);await wait(700);
+   const point=await page.getByRole('button',{name:'Continue desktop workflow',exact:true}).evaluate(b=>{const r=b.getBoundingClientRect();return {x:screenX+r.x+r.width/2,y:screenY+outerHeight-innerHeight+r.y+r.height/2};});
+   await command('workflow-pointer|'+browserChild.pid+'|'+point.x+'|'+point.y,'pointer-sent');await page.waitForFunction(()=>window.clicked===true);await count(++total);
+   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.equal(project.guide.steps.at(-1).instruction,'Click “Continue desktop workflow”');
+   browserOwned=captureTree(capture(browserChild));browserCrashOwned=crash.captureOwnedCrashHelpers({bundle,baseline,known:browserCrashOwned});
+   await cleanupDesktop({app:{process:()=>browserChild,close:()=>browser.close()},owned:[...browserOwned,...browserCrashOwned]});browser=null;browserChild=null;browserOwned=[];browserCrashOwned=[];
+  }
+  await command('click','clicked');await count(++total);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
+  await command('workflow-double','double-sent');await count(++total);assert.equal(project.guide.steps.at(-1).instruction,'Double-click “Open settings”');
   if(actualApp){
    const pid=helperOwned[0].pid;
    const source='var p=Application("System Events").processes.whose({unixId:'+pid+'})()[0];var items=[];for(var b of p.menuBars())items=items.concat(b.menuBarItems());var item=items.find(x=>{try{return String(x.name()).includes("Copycat");}catch{return false;}});if(!item)throw Error("Owned recording menu-bar item is missing.");item.click();delay(.2);item.menus[0].menuItems.byName("Pause recording").click();';
@@ -66,13 +82,13 @@ async function main(){
    const paused=JSON.parse(await fs.readFile(guideFile,'utf8'));await command('click','clicked');await wait(600);assert.deepEqual(JSON.parse(await fs.readFile(guideFile,'utf8')),paused,'Menu-bar pause must stop actual capture without changing saved work.');
    await editor.getByRole('button',{name:'Start / resume desktop workflow',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
    helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});
-   assert.equal(helperOwned.length,1);await command('click','clicked');await count(16);
+   assert.equal(helperOwned.length,1);await command('click','clicked');await count(++total);
    await editor.getByRole('button',{name:'Stop capture',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
    for(const row of helperOwned)await verifyStopped(row);helperOwned=[];
    const preserved=JSON.parse(await fs.readFile(guideFile,'utf8'));
    await editor.getByRole('button',{name:'Start / resume desktop workflow',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
    helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});
-   assert.equal(helperOwned.length,1);await command('click','clicked');await count(17);
+   assert.equal(helperOwned.length,1);await command('click','clicked');await count(total+1);
    await editor.getByRole('button',{name:'Cancel capture',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture cancelled'));
    for(const row of helperOwned)await verifyStopped(row);helperOwned=[];
    project=JSON.parse(await fs.readFile(guideFile,'utf8'));assert.deepEqual(project.guide,preserved.guide);assert.deepEqual(project.assets,preserved.assets);
@@ -82,11 +98,12 @@ async function main(){
   }const file=path.join(temporary,'guide.mqguide');await P.atomicWrite(file,project);const reopened=await P.read(file);assert.deepEqual(reopened,project);assert.ok(!JSON.stringify(project.guide.steps).includes('CONTROLLED-TYPING-SECRET'));
   await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,actualApp?'.validation/desktop-workflow-app-project.mqguide':'.validation/desktop-workflow-component-project.mqguide'),project);
   const oracle=path.join(temporary,'DesktopInspect');execFileSync('xcrun',['swiftc','-O','-target','arm64-apple-macos14.2','-module-cache-path',process.env.GUIDES_SWIFT_MODULE_CACHE||path.join(temporary,'modules'),path.join(root,'test/DesktopInspect.swift'),'-o',oracle],{timeout:120000,stdio:'pipe'});const pixels=JSON.parse(execFileSync(oracle,[file],{encoding:'utf8',timeout:30000}));assert.equal(pixels.passed,true);
-  proof={passed:true,scope:actualApp?(launched.candidate?'Actual signed packaged desktop workflow; application approvals controlled':'SDK desktop integration development only, not signed packaged qualification'):'Development native component only, not signed packaged qualification',form:actualApp?(launched.suite?'suite':'standalone'):'component',packaged:!!launched?.candidate,tool:launched?.candidate?.version,suiteVersion:launched?.suiteVersion,menuBarPauseVerified:actualApp,source:launched?.candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID,pixels,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows','editable save/reopen preserves steps and assets']};
+  proof={passed:true,scope:actualApp?(launched.candidate?'Actual signed packaged desktop workflow; application approvals controlled':'SDK desktop integration development only, not signed packaged qualification'):'Development native component only, not signed packaged qualification',form:actualApp?(launched.suite?'suite':'standalone'):'component',packaged:!!launched?.candidate,tool:launched?.candidate?.version,suiteVersion:launched?.suiteVersion,menuBarPauseVerified:actualApp,browserWindowVerified:!!process.env.GUIDES_TEST_CHROMIUM,source:launched?.candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),sdk:require('@matiq-solutions/sdk/package.json').version,arch:process.arch,fixturePID:selected.pid,textEditPID,pixels,steps:project.guide.steps.map(s=>({instruction:s.instruction,application:s.source.application,annotations:s.annotations})),checks:['actual menu bar and menu item','actual child sheet and confirmation','typing produces generic wording without raw text','actual Save shortcut','actual drag and destination callouts','right click and Escape','actual TextEdit formatting between fixture actions','single session across applications and windows','editable save/reopen preserves steps and assets']};
  }catch(error){primary=error;throw error;}finally{
   if(!proof){await fs.mkdir(path.join(root,'.validation'),{recursive:true});await P.atomicWrite(path.join(root,'.validation/desktop-workflow-component-failed-project.mqguide'),project);}
   const errors=[];for(const [label,operation] of [
    ['TextEdit',()=>textedit?.close()],
+   ['Browser',()=>cleanupDesktop({app:browserChild?{process:()=>browserChild,close:()=>browser?.close()}:null,owned:[...browserOwned,...browserCrashOwned]})],
    ['Application',()=>cleanupDesktop({app:launched?.app,owned:appOwned})],
    ['Recorder',()=>cleanupDesktop({app:helper?{process:()=>helper,close:async()=>{if(helper.exitCode===null){const done=once(helper,'exit');helper.stdin.end('stop\n');await done;}}}:null,owned:helperOwned})],
    ['Fixture',()=>cleanupDesktop({app:fixture?{process:()=>fixture,close:async()=>{if(fixture.exitCode===null){const done=once(fixture,'exit');fixture.stdin.end('quit\n');await done;}}}:null,owned:fixtureOwned})]
