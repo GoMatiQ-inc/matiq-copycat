@@ -16,7 +16,7 @@ async function main(){
   await page.locator('#redo').click();assert.equal(await page.locator('#steps li').count(),1);
   await page.locator('#save').click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
   const snapshot=await page.evaluate(()=>window.guides.request('state'));await app.evaluate(({webContents},snapshot)=>{webContents.getAllWebContents().find(w=>w.getURL().endsWith('/src/index.html')).send('com.matiq.guides:state',snapshot);},snapshot);
-  await page.locator('#undo').click();await page.waitForFunction(()=>document.querySelector('#steps').children.length===2);assert.equal(await page.locator('#instruction').inputValue(),'Open settings');
+  await page.locator('#undo').click();await page.waitForFunction(()=>document.querySelector('#steps').children.length===2);assert.equal(await page.locator('#instruction').inputValue(),'Save changes','Undo restores the deleted step and its selection.');
   await page.locator('#redo').click();assert.equal(await page.locator('#steps li').count(),1);
   await page.locator('#add-step').click();assert.equal(await page.locator('#redo').isDisabled(),true,'A new edit invalidates redo.');
   if(process.env.COPYCAT_UI_SCREENSHOT){await page.screenshot({path:process.env.COPYCAT_UI_SCREENSHOT});}

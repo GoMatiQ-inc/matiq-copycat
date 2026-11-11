@@ -47,11 +47,13 @@ func controlLabel(_ element: AXUIElement) -> String {
        let title = title,CFGetTypeID(title) == AXUIElementGetTypeID() {
         let label = title as! AXUIElement
         if text(label,kAXRoleAttribute as CFString) == "AXStaticText" {
-            let value = text(label,kAXValueAttribute as CFString)
-            if !value.isEmpty { return String(value.prefix(60)) }
+            for key in [kAXValueAttribute,kAXTitleAttribute,kAXDescriptionAttribute] {
+                let value = text(label,key as CFString)
+                if !value.isEmpty { return String(value.prefix(60)) }
+            }
         }
     }
-    return ""
+    return String(text(element,kAXHelpAttribute as CFString).prefix(60))
 }
 func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout AXUIElement?) -> [String: Any] {
     var found: AXUIElement?
@@ -346,6 +348,31 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     var stopped = false
     var statusItem: NSStatusItem?
     let owner = getppid()
+    var accessibilityChanges: [pid_t:(AXUIElement,CFString,CFTypeRef)] = [:]
+    func prepareApplication(_ app: NSRunningApplication) {
+        let pid=app.processIdentifier
+        guard pid != owner,pid != getpid(),accessibilityChanges[pid] == nil else { return }
+        let element=AXUIElementCreateApplication(pid)
+        _ = text(element,kAXRoleAttribute as CFString)
+        let browser=["com.google.Chrome","com.microsoft.edgemac"].contains(app.bundleIdentifier ?? "")
+        for name in browser ? ["AXManualAccessibility","AXEnhancedUserInterface"]:["AXManualAccessibility"] {
+            let key=name as CFString;var previous:CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element,key,&previous) == .success,let previous=previous,CFGetTypeID(previous)==CFBooleanGetTypeID() else { continue }
+            if CFBooleanGetValue((previous as! CFBoolean)) { return }
+            let result=AXUIElementSetAttributeValue(element,key,kCFBooleanTrue)
+            // Chromium processes this request before AppKit may return notImplemented.
+            if result == .success || (browser && name == "AXEnhancedUserInterface" && result == .notImplemented) { accessibilityChanges[pid]=(element,key,previous);return }
+        }
+    }
+    func restoreAccessibility() -> Bool {
+        var restored=true
+        for (pid,change) in accessibilityChanges {
+            guard NSRunningApplication(processIdentifier:pid)?.isTerminated == false else { continue }
+            let result=AXUIElementSetAttributeValue(change.0,change.1,change.2)
+            if result != .success && !(change.1 as String == "AXEnhancedUserInterface" && result == .notImplemented) { restored=false }
+        }
+        accessibilityChanges.removeAll();return restored
+    }
 
     func start() async {
         do {
@@ -372,11 +399,11 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             let center = NSWorkspace.shared.notificationCenter
             // Query the foreground app's standard role before a click, allowing lazy
             // browser accessibility trees to become available without launch flags.
-            if let app = NSWorkspace.shared.frontmostApplication { _ = text(AXUIElementCreateApplication(app.processIdentifier),kAXRoleAttribute as CFString) }
+            if let app = NSWorkspace.shared.frontmostApplication { prepareApplication(app) }
             observers.append(center.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main) { [weak self] note in
                 MainActor.assumeIsolated {
                     guard self?.stopped == false, let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-                    _ = text(AXUIElementCreateApplication(app.processIdentifier),kAXRoleAttribute as CFString)
+                    self?.prepareApplication(app)
                 }
             })
             for name in [NSWorkspace.willSleepNotification,NSWorkspace.screensDidSleepNotification,NSWorkspace.sessionDidResignActiveNotification] {
@@ -426,8 +453,10 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         for frame in frames { frame.stopped = true;frame.image = nil }
         if let reason = reason { send(["type":"issue","reason":reason]) }
         if let command = command { send(["type":"control","command":command]) }
+        let accessibilityRestored=restoreAccessibility()
         Task { @MainActor in
-            var failed = false
+            var failed = !accessibilityRestored
+            if !accessibilityRestored { send(["type":"issue","reason":"Recording stopped, but an application’s accessibility state could not be restored. Close and reopen that application before recording again."]) }
             for frame in frames { do { try await frame.stop() } catch { failed = true } }
             frames = []
             if let item = statusItem { NSStatusBar.system.removeStatusItem(item) };statusItem = nil

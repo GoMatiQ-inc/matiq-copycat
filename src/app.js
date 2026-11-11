@@ -8,9 +8,9 @@ window.guidesRender=async({step,asset})=>(await render(step,asset)).toDataURL('i
 const clone=value=>JSON.parse(JSON.stringify(value));
 const step=()=>project?.guide.steps.find(s=>s.id===selected);
 function message(error=''){$('message').textContent=error.message||error;}
-function state(label){$('save-state').textContent=label;}
+function state(label){$('save-state').textContent=label;$('editor-save-state').textContent=label;}
 function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)draftWrite=Promise.resolve(draftWrite).then(()=>request('draft',project)).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
-const historySnapshot=()=>({...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}});
+const historySnapshot=()=>({project:{...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}},selected});
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy)return;if(captureStatus&&['recording','paused'].includes(captureStatus.phase)){message('Stop capture to edit your guide.');return;}remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
@@ -24,7 +24,7 @@ function drawContent(){
   if(!project){document.body.dataset.recording='false';drawLibrary();return;}
   const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
   for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
-  $('capture-pause').disabled=captureStatus?.phase!=='recording';$('capture-resume').disabled=captureStatus?.phase!=='paused';$('capture-stop').disabled=!active;$('capture-cancel').disabled=!active;
+  $('capture-pause').hidden=!active;$('capture-stop').hidden=!active;$('capture-cancel').hidden=!active;$('capture-pause').disabled=captureStatus?.phase!=='recording';$('capture-resume').disabled=captureStatus?.phase!=='paused';$('capture-stop').disabled=!active;$('capture-cancel').disabled=!active;
   $('desktop-workflow').textContent=captureStatus?.phase==='paused'?'Resume recording':'Record desktop';
   $('desktop-workflow').disabled=!!active&&!(captureStatus.source==='desktop'&&captureStatus.phase==='paused');
   $('desktop-start').disabled=!!active&&!(captureStatus.source==='desktop'&&captureStatus.phase==='paused');$('desktop-list').disabled=!!active&&captureStatus.phase==='recording';
@@ -68,8 +68,8 @@ $('privacy-inline').onclick=$('privacy-nav').onclick=()=>{$('privacy').hidden=!$
 $('duplicate-guide').onclick=()=>run(async()=>{await request('duplicate');message('Saved copy added to your library.');});
 $('delete-guide').onclick=()=>run(async()=>{accept(await request('delete'));await list();});
 $('add-step').onclick=()=>mutation(()=>{const value={id:crypto.randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]};project.guide.steps.push(value);selected=value.id;});
-$('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());project=past.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
-$('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());project=future.pop();if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+$('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());const previous=past.pop();project=previous.project;selected=previous.selected;if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+$('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());const next=future.pop();project=next.project;selected=next.selected;if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
 for(const [id,delta] of [['up',-1],['down',1]])$(id).onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.findIndex(s=>s.id===selected),to=i+delta;if(i>=0&&to>=0&&to<list.length)[list[i],list[to]]=[list[to],list[i]];});
 $('duplicate-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step()),copy=clone(step());copy.id=crypto.randomUUID();list.splice(i+1,0,copy);selected=copy.id;});
 $('delete-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step());list.splice(i,1);selected=list[Math.min(i,list.length-1)]?.id;});

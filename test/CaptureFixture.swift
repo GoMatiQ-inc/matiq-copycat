@@ -40,6 +40,11 @@ window.title="MatiQ Copycat Native Fixture"
 let button=PaintedButton(title:"Open settings",target:action,action:#selector(Actions.pressed(_:)))
 button.frame=NSRect(x:50,y:220,width:180,height:40)
 window.contentView!.addSubview(button)
+if ProcessInfo.processInfo.environment["GUIDES_TEST_ASSOCIATED_TITLE"] == "1" {
+ let title=NSTextField(labelWithString:"Open settings");title.setAccessibilityRole(.staticText);title.setAccessibilityElement(true);title.frame=NSRect(x:50,y:198,width:180,height:18);window.contentView!.addSubview(title)
+ button.setAccessibilityTitle("");button.setAccessibilityTitleUIElement(title)
+ output(["type":"title-fixture","role":title.accessibilityRole()?.rawValue ?? "none","value":title.accessibilityValue() as? String ?? "none","title":title.accessibilityTitle() ?? "none","linked":button.accessibilityTitleUIElement() != nil])
+}
 let field=NSTextField(string:"CONTROLLED-SECRET-DO-NOT-LOG")
 field.frame=NSRect(x:50,y:140,width:400,height:40)
 window.contentView!.addSubview(field)
