@@ -204,7 +204,7 @@ exports.activate = async host => {
         if(!current||dirty)throw Error('Save the guide before duplicating it.');const copy=P.clone(current);copy.guide.id=randomUUID();copy.guide.title+=' (copy)';await P.atomicWrite(path.join(library,copy.guide.id+'.mqguide'),copy);return snapshot();
       }
       if(name==='delete'){
-        if(!current||dirty)throw Error('Save the current guide before deleting it.');const answer=await dialog.showMessageBox(host.window,{type:'warning',message:'Delete this local guide?',detail:'This permanently removes this library copy and its embedded screenshots. Portable exports are separate files.',buttons:['Keep guide','Delete guide'],cancelId:0,defaultId:0});if(answer.response===1){await fs.unlink(file);for(const suffix of ['.pending','.draft','.draft.pending']){try{await fs.unlink(file+suffix);}catch(e){if(e.code!=='ENOENT')throw e;}}await closeProject();stateRevision++;}return snapshot();
+        if(!current)throw Error('Open the guide you want to delete.');const answer=await dialog.showMessageBox(host.window,{type:'warning',message:'Delete this local guide?',detail:'This permanently removes this library copy and its embedded screenshots. Portable exports are separate files.',buttons:['Keep guide','Delete guide'],cancelId:0,defaultId:0});if(answer.response===1){await fs.unlink(file);for(const suffix of ['.pending','.draft','.draft.pending']){try{await fs.unlink(file+suffix);}catch(e){if(e.code!=='ENOENT')throw e;}}await closeProject();stateRevision++;}return snapshot();
       }
       if(name==='image'){
         const choice=await dialog.showOpenDialog(host.window,{properties:['openFile'],filters:[{name:'Screenshot',extensions:['png','jpg','jpeg']}]});if(choice.canceled)return null;

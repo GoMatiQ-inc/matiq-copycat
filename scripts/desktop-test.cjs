@@ -26,7 +26,7 @@ async function main(){
   const image=path.join(temporary,'fixture.png');await fs.writeFile(image,Buffer.from(data,'base64'));
   await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},image);
   await page.getByRole('button',{name:'Replace screenshot',exact:true}).click();
-  await page.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');
+  if(await page.locator('#edit-screenshot').count()&&!await page.locator('.annotation-tools[open]').count())await page.locator('#edit-screenshot').click();await page.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');
   await page.getByRole('button',{name:'Apply region',exact:true}).click();
   await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
   const guideFile=path.join(profile,'guides',(await fs.readdir(path.join(profile,'guides'))).find(f=>f.endsWith('.mqguide')));

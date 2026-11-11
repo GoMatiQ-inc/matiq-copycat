@@ -36,6 +36,25 @@ func text(_ element: AXUIElement, _ key: CFString) -> String {
     guard AXUIElementCopyAttributeValue(element, key, &result) == .success else { return "" }
     return result as? String ?? ""
 }
+func controlLabel(_ element: AXUIElement) -> String {
+    for key in [kAXTitleAttribute, kAXDescriptionAttribute] {
+        let label = text(element,key as CFString).trimmingCharacters(in:.whitespacesAndNewlines)
+        if !label.isEmpty { return String(label.prefix(60)) }
+    }
+    // A control may name its separate static title instead of exposing AXTitle.
+    var title: CFTypeRef?
+    if AXUIElementCopyAttributeValue(element,kAXTitleUIElementAttribute as CFString,&title) == .success,
+       let title = title,CFGetTypeID(title) == AXUIElementGetTypeID() {
+        let label = title as! AXUIElement
+        if text(label,kAXRoleAttribute as CFString) == "AXStaticText" {
+            for key in [kAXValueAttribute,kAXTitleAttribute,kAXDescriptionAttribute] {
+                let value = text(label,key as CFString)
+                if !value.isEmpty { return String(value.prefix(60)) }
+            }
+        }
+    }
+    return String(text(element,kAXHelpAttribute as CFString).prefix(60))
+}
 func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout AXUIElement?) -> [String: Any] {
     var found: AXUIElement?
     guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &found) == .success,
@@ -44,7 +63,7 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout A
     guard AXUIElementGetPid(hitElement, &owner) == .success, owner == pid else { return [:] }
     let roles = ["AXButton": "button", "AXLink": "link", "AXCheckBox": "checkbox", "AXRadioButton": "radio button", "AXPopUpButton": "dropdown", "AXMenuItem": "menu item", "AXMenuBarItem": "menu"]
     var actionable = hitElement
-    for _ in 0..<5 {
+    for _ in 0..<8 {
         if roles[text(actionable,kAXRoleAttribute as CFString)] != nil { break }
         var parent: CFTypeRef?
         guard AXUIElementCopyAttributeValue(actionable,kAXParentAttribute as CFString,&parent) == .success,
@@ -62,12 +81,10 @@ func target(_ point: CGPoint, pid: pid_t, frame: CGRect, observedWindow: inout A
         observedWindow = (windowValue as! AXUIElement)
     }
 
-    // Never read AXValue, selected text, document URLs, or text-field contents.
+    // Never read selected text, document URLs, or text-field contents.
     var result: [String: Any] = ["control": roles[role] ?? "control"]
     if roles[role] != nil {
-        let title = text(element,kAXTitleAttribute as CFString)
-        let label = title.isEmpty ? text(element,kAXDescriptionAttribute as CFString) : title
-        result["label"] = String(label.prefix(60))
+        result["label"] = controlLabel(element)
     }
     var position: CFTypeRef?, size: CFTypeRef?
     if AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
@@ -331,6 +348,31 @@ let geometryWarning = "The selected window moved or resized while its screenshot
     var stopped = false
     var statusItem: NSStatusItem?
     let owner = getppid()
+    var accessibilityChanges: [pid_t:(AXUIElement,CFString,CFTypeRef)] = [:]
+    func prepareApplication(_ app: NSRunningApplication) {
+        let pid=app.processIdentifier
+        guard pid != owner,pid != getpid(),accessibilityChanges[pid] == nil else { return }
+        let element=AXUIElementCreateApplication(pid)
+        _ = text(element,kAXRoleAttribute as CFString)
+        let browser=["com.google.Chrome","com.microsoft.edgemac"].contains(app.bundleIdentifier ?? "")
+        for name in browser ? ["AXManualAccessibility","AXEnhancedUserInterface"]:["AXManualAccessibility"] {
+            let key=name as CFString;var previous:CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element,key,&previous) == .success,let previous=previous,CFGetTypeID(previous)==CFBooleanGetTypeID() else { continue }
+            if CFBooleanGetValue((previous as! CFBoolean)) { return }
+            let result=AXUIElementSetAttributeValue(element,key,kCFBooleanTrue)
+            // Chromium processes this request before AppKit may return notImplemented.
+            if result == .success || (browser && name == "AXEnhancedUserInterface" && result == .notImplemented) { accessibilityChanges[pid]=(element,key,previous);return }
+        }
+    }
+    func restoreAccessibility() -> Bool {
+        var restored=true
+        for (pid,change) in accessibilityChanges {
+            guard NSRunningApplication(processIdentifier:pid)?.isTerminated == false else { continue }
+            let result=AXUIElementSetAttributeValue(change.0,change.1,change.2)
+            if result != .success && !(change.1 as String == "AXEnhancedUserInterface" && result == .notImplemented) { restored=false }
+        }
+        accessibilityChanges.removeAll();return restored
+    }
 
     func start() async {
         do {
@@ -355,6 +397,15 @@ let geometryWarning = "The selected window moved or resized while its screenshot
             monitor = NSEvent.addGlobalMonitorForEvents(matching:mask) { [weak self] event in self?.observe(event) }
             guard monitor != nil else { stop("Desktop interaction observation could not start. Check Accessibility permission and retry."); return }
             let center = NSWorkspace.shared.notificationCenter
+            // Query the foreground app's standard role before a click, allowing lazy
+            // browser accessibility trees to become available without launch flags.
+            if let app = NSWorkspace.shared.frontmostApplication { prepareApplication(app) }
+            observers.append(center.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main) { [weak self] note in
+                MainActor.assumeIsolated {
+                    guard self?.stopped == false, let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+                    self?.prepareApplication(app)
+                }
+            })
             for name in [NSWorkspace.willSleepNotification,NSWorkspace.screensDidSleepNotification,NSWorkspace.sessionDidResignActiveNotification] {
                 observers.append(center.addObserver(forName:name,object:nil,queue:.main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.stop("The Mac slept or locked. Recording stopped; explicitly resume when ready.") }
@@ -402,8 +453,10 @@ let geometryWarning = "The selected window moved or resized while its screenshot
         for frame in frames { frame.stopped = true;frame.image = nil }
         if let reason = reason { send(["type":"issue","reason":reason]) }
         if let command = command { send(["type":"control","command":command]) }
+        let accessibilityRestored=restoreAccessibility()
         Task { @MainActor in
-            var failed = false
+            var failed = !accessibilityRestored
+            if !accessibilityRestored { send(["type":"issue","reason":"Recording stopped, but an application’s accessibility state could not be restored. Close and reopen that application before recording again."]) }
             for frame in frames { do { try await frame.stop() } catch { failed = true } }
             frames = []
             if let item = statusItem { NSStatusBar.system.removeStatusItem(item) };statusItem = nil

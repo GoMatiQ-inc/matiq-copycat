@@ -8,7 +8,7 @@ async function main(){
  let fixture,helper,textedit,textEditPID,fixtureOwned=[],helperOwned=[],project=C.begin(P.create(),'desktop'),proof,failure=null,primary=null;
  const timer=setTimeout(()=>{for(const child of [helper,fixture,launched?.app?.process(),browserChild])if(child?.exitCode===null)child.kill('SIGTERM');},240000);
  function channel(child,label){
-  let tail='';const rows=[];child.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const row=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);rows.push(row);}});
+  let tail='';const rows=[];child.stdout.on('data',chunk=>{tail+=chunk;let at;while((at=tail.indexOf('\n'))>=0){const row=JSON.parse(tail.slice(0,at));tail=tail.slice(at+1);if(row.type==='title-fixture')console.log('Controlled title fixture: '+JSON.stringify(row));rows.push(row);}});
   return async type=>{for(let i=0;i<300;i++){const error=rows.find(v=>['issue','fixture-error'].includes(v.type));if(error)throw Error(label+': '+error.reason);const at=rows.findIndex(v=>v.type===type);if(at>=0)return rows.splice(at,1)[0];if(child.exitCode!==null)throw Error(label+' exited before '+type);await new Promise(r=>setTimeout(r,50));}throw Error(label+' did not emit '+type);};
  }
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
@@ -53,19 +53,25 @@ async function main(){
   assert.ok(/\\b(?:\s|\\)/.test(await fs.readFile(textedit.document,'utf8')),'The actual TextEdit button must change saved formatting.');
   let total=13;const before=project.guide.steps.slice();await textedit.close();textedit=null;
   if(process.env.GUIDES_TEST_CHROMIUM){
+   if(actualApp){await editor.locator('#capture-pause').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));for(const row of helperOwned)await verifyStopped(row);helperOwned=[];}
    const executable=process.env.GUIDES_TEST_CHROMIUM,bundle=executable.slice(0,executable.indexOf('.app/')+4),profile=path.join(temporary,'browser');
    const crash=require('./browser-crash-fixture.cjs'),baseline=crash.crashHandlers(bundle);
-   browserChild=spawn(executable,['--user-data-dir='+profile,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-updater-scheduler','--disable-sync','--force-renderer-accessibility','about:blank'],{stdio:['ignore','ignore','ignore']});
+   browserChild=spawn(executable,['--user-data-dir='+profile,'--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-updater-scheduler','--disable-sync','about:blank'],{stdio:['ignore','ignore','ignore']});
    browserOwned=captureTree(capture(browserChild));let port;
    for(let i=0;i<200;i++){try{port=Number((await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8')).split('\n')[0]);if(port)break;}catch{}if(browserChild.exitCode!==null)throw Error('Owned browser exited before its loopback inspector was ready.');await wait(50);}
+   const probe=path.join(temporary,'accessibility-state');execFileSync('xcrun',['swiftc','-module-cache-path',process.env.GUIDES_SWIFT_MODULE_CACHE||path.join(temporary,'modules'),path.join(root,'test/AccessibilityState.swift'),'-o',probe],{timeout:60000,stdio:'pipe'});
+   const accessState=()=>JSON.parse(execFileSync(probe,[String(browserChild.pid)],{encoding:'utf8',timeout:10000}));
+   const originalAccessibility=accessState();
+   if(actualApp){await editor.locator('#desktop-workflow').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});}
    assert.ok(port);browser=await require('playwright').chromium.connectOverCDP('http://127.0.0.1:'+port);browserVersion=browser.version();
    const context=browser.contexts()[0];await context.route(/^https?:/,route=>route.abort());const page=context.pages()[0]||await context.newPage();const file=path.join(temporary,'browser.html');
-   await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Controlled desktop browser fixture</title><style>body{padding:60px}button{font:24px sans-serif;padding:20px;background:magenta}</style><button onclick="window.clicked=true">Continue desktop workflow</button>');await page.goto(require('node:url').pathToFileURL(file).href);await page.bringToFront();
-   execFileSync('/usr/bin/osascript',['-l','JavaScript','-e','Application("System Events").processes.whose({unixId:'+browserChild.pid+'})()[0].frontmost=true;'],{timeout:10000,stdio:'pipe'});await wait(1800);
+   await fs.writeFile(file,'<!doctype html><meta charset="utf-8"><title>Controlled desktop browser fixture</title><style>body{padding:60px}button{font:24px sans-serif;padding:20px;background:magenta}</style><button onclick="window.clickCount=(window.clickCount||0)+1;window.clicked=true">Continue desktop workflow</button>');await page.goto(require('node:url').pathToFileURL(file).href);await page.bringToFront();
+   execFileSync('/usr/bin/osascript',['-l','JavaScript','-e','Application("System Events").processes.whose({unixId:'+browserChild.pid+'})()[0].frontmost=true;'],{timeout:10000,stdio:'pipe'});await wait(2400);
    const point=await page.getByRole('button',{name:'Continue desktop workflow',exact:true}).evaluate(b=>{const r=b.getBoundingClientRect();return {x:screenX+r.x+r.width/2,y:screenY+outerHeight-innerHeight+r.y+r.height/2};});
    await command('workflow-pointer|'+browserChild.pid+'|'+point.x+'|'+point.y,'pointer-sent');await page.waitForFunction(()=>window.clicked===true);await count(++total);
-   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.ok(['Click “Continue desktop workflow”','Click the control'].includes(project.guide.steps.at(-1).instruction),'Use a real accessible browser label or an editable generic instruction; never invent it.');
+   assert.match(project.guide.steps.at(-1).source.application,/Chrome|Edge/);assert.equal(project.guide.steps.at(-1).instruction,'Click “Continue desktop workflow”','A normal browser button must expose its real label without forced accessibility launch flags.');
    browserOwned=captureTree(capture(browserChild));browserCrashOwned=crash.captureOwnedCrashHelpers({bundle,baseline,known:browserCrashOwned});
+   if(actualApp){await editor.locator('#capture-pause').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));for(const row of helperOwned)await verifyStopped(row);helperOwned=[];await wait(2400);assert.deepEqual(accessState(),originalAccessibility,'Recording restores browser accessibility attributes to their original values.');assert.equal(await page.evaluate(()=>window.clickCount),1,'Accessibility activation and cleanup must not replay the browser click.');await editor.locator('#desktop-workflow').click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));helperOwned=captureTree(capture(launched.app.process())).filter(row=>{try{return path.basename(execFileSync('/bin/ps',['-p',String(row.pid),'-o','comm='],{encoding:'utf8'}).trim())==='guides-capture';}catch{return false;}});}
    await cleanupDesktop({app:{process:()=>browserChild,close:()=>browser.close()},owned:[...browserOwned,...browserCrashOwned]});browser=null;browserChild=null;browserOwned=[];browserCrashOwned=[];
   }
   await command('click','clicked');await count(++total);assert.deepEqual(project.guide.steps.slice(0,13),before,'Cross-application capture preserves prior steps.');
@@ -104,7 +110,7 @@ async function main(){
    await editor.getByLabel('Guide title',{exact:true}).fill('Desktop workflow integration fixture');
    await editor.locator('#steps li button').first().click();
    await editor.getByLabel('Instruction',{exact:true}).fill('Reviewed desktop workflow instruction');
-   await editor.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');await editor.getByRole('button',{name:'Apply region',exact:true}).click();
+   if(await editor.locator('#edit-screenshot').count()&&!await editor.locator('.annotation-tools[open]').count())await editor.locator('#edit-screenshot').click();await editor.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');await editor.getByRole('button',{name:'Apply region',exact:true}).click();
    await editor.getByRole('button',{name:'Save',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
    const edited=await P.read(guideFile);assert.deepEqual(edited.guide.steps.map(s=>s.id),project.guide.steps.map(s=>s.id));assert.deepEqual(edited.assets,project.assets);assert.ok(edited.guide.steps[0].annotations.some(a=>a.type==='redact'));
    const profile=path.join(temporary,'profile'),packaged=!!launched.candidate;
