@@ -110,7 +110,7 @@ async function main(){
    await editor.getByLabel('Guide title',{exact:true}).fill('Desktop workflow integration fixture');
    await editor.locator('#steps li button').first().click();
    await editor.getByLabel('Instruction',{exact:true}).fill('Reviewed desktop workflow instruction');
-   await editor.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');await editor.getByRole('button',{name:'Apply region',exact:true}).click();
+   if(await editor.locator('#edit-screenshot').count()&&!await editor.locator('.annotation-tools[open]').count())await editor.locator('#edit-screenshot').click();await editor.getByLabel('Screenshot tool',{exact:true}).selectOption('redact');await editor.getByRole('button',{name:'Apply region',exact:true}).click();
    await editor.getByRole('button',{name:'Save',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
    const edited=await P.read(guideFile);assert.deepEqual(edited.guide.steps.map(s=>s.id),project.guide.steps.map(s=>s.id));assert.deepEqual(edited.assets,project.assets);assert.ok(edited.guide.steps[0].annotations.some(a=>a.type==='redact'));
    const profile=path.join(temporary,'profile'),packaged=!!launched.candidate;

@@ -3,7 +3,7 @@
   "id": "com.matiq.guides",
   "name": "MatiQ Copycat",
   "description": "Capture, edit and export illustrated workflow guides locally.",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "sdk": 1,
   "dataVersion": 1,
   "runtime": "electron-45.2.3",

@@ -1,7 +1,8 @@
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
+let checkedSteps=new Set(),previewObserver=null;
 let updateState={enabled:false},captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,exportCleanup=false,busy=false,draftTimer=null,draftWrite=null;
-window.guidesDispose=()=>{clearTimeout(draftTimer);};
+window.guidesDispose=()=>{clearTimeout(draftTimer);previewObserver?.disconnect();};
 window.guidesDraftSnapshot=()=>project;
 window.guidesDirty=false;
 window.guidesRender=async({step,asset})=>(await render(step,asset)).toDataURL('image/png');
@@ -10,18 +11,18 @@ const step=()=>project?.guide.steps.find(s=>s.id===selected);
 function message(error=''){$('message').textContent=error.message||error;}
 function state(label){$('save-state').textContent=label;$('editor-save-state').textContent=label;}
 function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)draftWrite=Promise.resolve(draftWrite).then(()=>request('draft',project)).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
-const historySnapshot=()=>({project:{...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}},selected});
+const historySnapshot=()=>({project:{...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}},selected,checked:[...checkedSteps]});
 function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
 function mutation(fn){if(busy)return;if(captureStatus&&['recording','paused'].includes(captureStatus.phase)){message('Stop capture to edit your guide.');return;}remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
 function drawUpdates(){const u=updateState;$('app-updates').hidden=!u.enabled;if(!u.enabled)return;$('update-status').textContent=['Current version '+u.current,u.offer?'Version '+u.offer.version+' · '+Math.ceil(u.offer.bytes/1024/1024)+' MiB':'',u.phase==='downloading'?u.progress+'%':'',u.detail].filter(Boolean).join(' — ');for(const [action,visible]of [['check',true],['download',u.phase==='available'],['restart',u.phase==='ready'],['cleanup',u.phase==='cleanup']]){const button=$('update-'+action);button.hidden=!visible;button.disabled=busy||exportCleanup||(action!=='cleanup'&&u.busy);}}
-function accept(result){if(result.updates)updateState=result.updates;if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected,resetHistory=previousID!==result.project?.guide.id||captureStatus?.id!==result.project?.capture?.id;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;if(resetHistory){past=[];future=[];}message(result.error);draw();}
+function accept(result){if(result.updates)updateState=result.updates;if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected,resetHistory=previousID!==result.project?.guide.id||captureStatus?.id!==result.project?.capture?.id;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;if(resetHistory){past=[];future=[];checkedSteps.clear();}message(result.error);draw();}
 async function list(){rows=await request('list');drawLibrary();}
 function drawLibrary(){const target=$('guide-list');target.replaceChildren();const query=$('search').value.toLowerCase();for(const row of rows.filter(r=>(r.title+' '+r.description).toLowerCase().includes(query))){const button=document.createElement('button');button.className='guide-card';button.disabled=!!row.invalid;const title=document.createElement('strong');title.textContent=row.title;const detail=document.createElement('span');detail.textContent=`${row.steps} steps`;button.append(title,detail);button.onclick=()=>run(async()=>accept(await request('open',row.id)));target.append(button);}if(!target.childElementCount)target.textContent='No matching guides. Create a guide to begin.';}
 function draw(){drawContent();$('export-cleanup').hidden=!exportCleanup;if(busy||exportCleanup)document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);if(exportCleanup&&!busy)$('export-cleanup').disabled=false;drawUpdates();}
 function drawContent(){
   $('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
-  if(!project){document.body.dataset.recording='false';drawLibrary();return;}
+  if(!project){previewObserver?.disconnect();document.body.dataset.recording='false';drawLibrary();return;}
   const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
   for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
   $('capture-pause').hidden=!active;$('capture-stop').hidden=!active;$('capture-cancel').hidden=!active;$('capture-pause').disabled=captureStatus?.phase!=='recording';$('capture-resume').disabled=captureStatus?.phase!=='paused';$('capture-stop').disabled=!active;$('capture-cancel').disabled=!active;
@@ -37,12 +38,34 @@ function drawContent(){
   const current=step();$('step-editor').hidden=!current;
   $('undo').disabled=!!active||!past.length;$('redo').disabled=!!active||!future.length;
   for(const id of ['up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations'])$(id).disabled=!!active||!current;
-  for(const id of ['apply-region','clear-annotations'])$(id).disabled=!!active||!current?.asset;
+  for(const id of ['apply-region','clear-annotations','edit-screenshot'])$(id).disabled=!!active||!current?.asset;
   $('up').disabled=!!active||!current||project.guide.steps[0]===current;$('down').disabled=!!active||!current||project.guide.steps.at(-1)===current;
   $('step-count').textContent=project.guide.steps.length+' steps';$('editor-empty').hidden=!!current;
   document.body.dataset.recording=active?'true':'false';document.body.dataset.capturePhase=captureStatus?.phase||'idle';
-  if(!current)return;
-  $('instruction').value=current.instruction;$('notes').value=current.notes;drawImage().catch(message);
+  if(current){$('instruction').value=current.instruction;$('notes').value=current.notes;drawImage().catch(message);}
+  drawDocument(active);
+}
+function drawSelection(active){
+ const valid=new Set(project.guide.steps.map(s=>s.id));checkedSteps=new Set([...checkedSteps].filter(id=>valid.has(id)));
+ $('selection-actions').hidden=!checkedSteps.size;$('selection-count').textContent=checkedSteps.size+' selected';
+ for(const id of ['selection-up','selection-down','selection-copy','selection-delete','selection-clear'])$(id).disabled=!!active||busy||!checkedSteps.size;
+ const steps=project.guide.steps;for(const [id,delta] of [['selection-up',-1],['selection-down',1]])$(id).disabled=!!active||busy||!steps.some((s,i)=>checkedSteps.has(s.id)&&steps[i+delta]&&!checkedSteps.has(steps[i+delta].id));
+}
+function drawDocument(active){
+ previewObserver?.disconnect();const root=$('document-cards'),editor=$('step-editor');editor.remove();root.replaceChildren();drawSelection(active);
+ const add=(index)=>{const button=document.createElement('button');button.className='insert-step';button.textContent='+ Add step here';button.setAttribute('aria-label',index?'Insert step after step '+index:'Insert step at the beginning');button.disabled=!!active;button.onclick=()=>insertStep(index);root.append(button);};
+ if(!active)add(0);
+ previewObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting&&project){previewObserver.unobserve(entry.target);const image=entry.target,s=project.guide.steps.find(s=>s.id===image.dataset.preview);if(s?.asset)render(s,project.assets[s.asset]).then(canvas=>{if(image.isConnected)image.src=canvas.toDataURL('image/png');}).catch(message);}},{rootMargin:'400px'});
+ for(const [index,s] of project.guide.steps.entries()){
+  const card=document.createElement('article');card.className='document-step';card.dataset.stepId=s.id;card.setAttribute('aria-label','Step '+(index+1));card.classList.toggle('current',s.id===selected);
+  const header=document.createElement('div');header.className='document-step-heading';const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=checkedSteps.has(s.id);check.disabled=!!active;check.setAttribute('aria-label','Select step '+(index+1));check.onchange=()=>{if(check.checked)checkedSteps.add(s.id);else checkedSteps.delete(s.id);drawSelection(active);};label.append(check,document.createTextNode('Step '+(index+1)));header.append(label);
+  const edit=document.createElement('button');edit.textContent=s.id===selected?'Editing':'Edit step';edit.disabled=!!active;edit.setAttribute('aria-label','Edit step '+(index+1));edit.onclick=()=>{selected=s.id;draw();$('instruction').focus();};header.append(edit);card.append(header);
+  if(s.id===selected)card.append(editor);
+  else{const text=document.createElement('button');text.className='inline-instruction';text.textContent=s.instruction||'Describe this action';text.dataset.stepTitle=s.id;text.disabled=!!active;text.setAttribute('aria-label','Edit instruction for step '+(index+1));text.onclick=()=>{selected=s.id;draw();$('instruction').focus();};card.append(text);if(s.asset){const button=document.createElement('button');button.className='document-image';button.disabled=!!active;button.setAttribute('aria-label','Edit screenshot for step '+(index+1));const image=document.createElement('img');image.alt='Screenshot for step '+(index+1);image.dataset.preview=s.id;button.append(image);button.onclick=()=>{selected=s.id;draw();document.querySelector('.annotation-tools').open=true;$('annotation').focus();};card.append(button);previewObserver.observe(image);}if(s.notes){const notes=document.createElement('p');notes.className='document-notes';notes.textContent=s.notes;card.append(notes);}}
+  root.append(card);if(!active)add(index+1);
+ }
+ if(!step())root.append(editor);
+ if(active&&selected)root.querySelector('[data-step-id="'+selected+'"]')?.scrollIntoView({block:'nearest'});
 }
 function drawCaptureReview(active){
  const list=$('capture-review');list.replaceChildren();if(!project.capture?.issues.length)return;const help=document.createElement('p');help.textContent='Capture warnings remain until you review them. After stopping, edit sensitive details or explain a correction. Remove a warning only after reviewing and correcting the missing action.';list.append(help);
@@ -58,7 +81,7 @@ function drawSharingReview(active){
 }
 $('sharing-reviewed').onchange=()=>{reviewedRevision=$('sharing-reviewed').checked&&!window.guidesDirty?modelRevision:null;drawSharingReview(captureStatus&&['recording','paused'].includes(captureStatus.phase));};
 async function drawImage(){const token=++generation,s=step(),canvas=$('screenshot');if(!s?.asset){canvas.hidden=true;$('screenshot-status').textContent='No screenshot. Choose Replace screenshot to add one.';return;}const image=await render(s,project.assets[s.asset],{original:true});if(token!==generation)return;canvas.hidden=false;canvas.width=image.width;canvas.height=image.height;canvas.getContext('2d').drawImage(image,0,0);if(s.crop){const c=s.crop,ctx=canvas.getContext('2d');ctx.strokeStyle='#dc7130';ctx.lineWidth=3;ctx.strokeRect(c.x*canvas.width,c.y*canvas.height,c.width*canvas.width,c.height*canvas.height);}$('screenshot-status').textContent=s.crop?'Crop shown in orange. Exports use the cropped region.':'Preview includes opaque redactions. Editable projects still retain the original screenshot.';}
-for(const field of ['title','description','instruction','notes'])$(field).addEventListener('input',()=>{if(busy)return;const obj=['title','description'].includes(field)?project.guide:step();if(!obj)return;remember();obj[field]=$(field).value;changed();if(field==='instruction'){const button=$('steps').querySelector('[aria-current=true]');if(button)button.textContent=`${project.guide.steps.indexOf(obj)+1}. ${obj.instruction||'Untitled step'}`;}});
+for(const field of ['title','description','instruction','notes'])$(field).addEventListener('input',()=>{if(busy)return;const obj=['title','description'].includes(field)?project.guide:step();if(!obj)return;remember();obj[field]=$(field).value;changed();if(field==='instruction'){const button=$('steps').querySelector('[aria-current=true]');if(button)button.textContent=`${project.guide.steps.indexOf(obj)+1}. ${obj.instruction||'Untitled step'}`;const heading=document.querySelector('[data-step-title="'+obj.id+'"]');if(heading)heading.textContent=obj.instruction||'Untitled step';}});
 $('search').oninput=drawLibrary;
 $('new').onclick=()=>run(async()=>accept(await request('new')));
 $('import').onclick=()=>run(async()=>accept(await request('import')));
@@ -67,20 +90,28 @@ $('back').onclick=$('library-nav').onclick=()=>run(async()=>{if(window.guidesDir
 $('privacy-inline').onclick=$('privacy-nav').onclick=()=>{$('privacy').hidden=!$('privacy').hidden;};
 $('duplicate-guide').onclick=()=>run(async()=>{await request('duplicate');message('Saved copy added to your library.');});
 $('delete-guide').onclick=()=>run(async()=>{accept(await request('delete'));await list();});
-$('add-step').onclick=()=>mutation(()=>{const value={id:crypto.randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]};project.guide.steps.push(value);selected=value.id;});
-$('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());const previous=past.pop();project=previous.project;selected=previous.selected;if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
-$('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());const next=future.pop();project=next.project;selected=next.selected;if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
-for(const [id,delta] of [['up',-1],['down',1]])$(id).onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.findIndex(s=>s.id===selected),to=i+delta;if(i>=0&&to>=0&&to<list.length)[list[i],list[to]]=[list[to],list[i]];});
-$('duplicate-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step()),copy=clone(step());copy.id=crypto.randomUUID();list.splice(i+1,0,copy);selected=copy.id;});
-$('delete-step').onclick=()=>mutation(()=>{const list=project.guide.steps,i=list.indexOf(step());list.splice(i,1);selected=list[Math.min(i,list.length-1)]?.id;});
+function insertStep(index){mutation(()=>{const value={id:crypto.randomUUID(),kind:'manual',instruction:'Describe this action',notes:'',timestamp:Date.now(),source:null,asset:null,crop:null,annotations:[]};project.guide.steps.splice(index,0,value);selected=value.id;checkedSteps.clear();});}
+$('add-step').onclick=()=>insertStep(project.guide.steps.length);
+$('undo').onclick=()=>{if(!past.length)return;future.push(historySnapshot());const previous=past.pop();project=previous.project;selected=previous.selected;checkedSteps=new Set(previous.checked);if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+$('redo').onclick=()=>{if(!future.length)return;past.push(historySnapshot());const next=future.pop();project=next.project;selected=next.selected;checkedSteps=new Set(next.checked);if(!step())selected=project.guide.steps[0]?.id;changed();draw();};
+function moveSteps(ids,delta){mutation(()=>{const steps=project.guide.steps;for(let i=delta<0?1:steps.length-2;delta<0?i<steps.length:i>=0;i-=delta)if(ids.has(steps[i].id)&&!ids.has(steps[i+delta].id))[steps[i],steps[i+delta]]=[steps[i+delta],steps[i]];});}
+function duplicateSteps(ids){mutation(()=>{const steps=project.guide.steps,copies=steps.filter(s=>ids.has(s.id)).map(s=>({...clone(s),id:crypto.randomUUID()}));if(!copies.length)return;const last=steps.findLastIndex(s=>ids.has(s.id));steps.splice(last+1,0,...copies);selected=copies[0].id;checkedSteps=new Set(copies.map(s=>s.id));});}
+function deleteSteps(ids){mutation(()=>{const steps=project.guide.steps,first=steps.findIndex(s=>ids.has(s.id));project.guide.steps=steps.filter(s=>!ids.has(s.id));selected=project.guide.steps[Math.min(Math.max(first,0),project.guide.steps.length-1)]?.id;checkedSteps.clear();});}
+for(const [id,delta] of [['up',-1],['down',1]])$(id).onclick=()=>moveSteps(new Set([selected]),delta);
+$('duplicate-step').onclick=()=>duplicateSteps(new Set([selected]));
+$('delete-step').onclick=()=>deleteSteps(new Set([selected]));
+$('selection-up').onclick=()=>moveSteps(checkedSteps,-1);$('selection-down').onclick=()=>moveSteps(checkedSteps,1);
+$('selection-copy').onclick=()=>duplicateSteps(checkedSteps);$('selection-delete').onclick=()=>deleteSteps(checkedSteps);
+$('selection-clear').onclick=()=>{checkedSteps.clear();draw();};
 $('replace-image').onclick=()=>run(async()=>{const result=await request('image');if(!result)return;remember();project.assets[result.key]=result.asset;const s=step();s.asset=result.key;s.crop=null;s.annotations=[];changed();draw();});
+$('edit-screenshot').onclick=()=>{const tools=document.querySelector('.annotation-tools');tools.open=!tools.open;if(tools.open)$('annotation').focus();};
 $('clear-annotations').onclick=()=>mutation(()=>{step().annotations=[];step().crop=null;});
 function region(rect){const s=step();if(!s?.asset)throw Error('Add a screenshot before placing a region.');if(!Object.values(rect).every(Number.isFinite)||rect.x<0||rect.y<0||rect.width<=0||rect.height<=0||rect.x+rect.width>1.000001||rect.y+rect.height>1.000001)throw Error('Keep a non-empty region inside the screenshot.');mutation(()=>{const type=$('annotation').value;if(type==='crop')s.crop=rect;else s.annotations.push({type,...rect,text:$('annotation-text').value});});}
 $('apply-region').onclick=()=>{try{region(Object.fromEntries(['x','y','width','height'].map(k=>[k,Number($(k).value)/100])));}catch(error){message(error);}};
 const canvas=$('screenshot');let start=null;
 const point=e=>{const b=canvas.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-b.left)/b.width)),y:Math.max(0,Math.min(1,(e.clientY-b.top)/b.height))};};
-canvas.onpointerdown=e=>{start=point(e);canvas.setPointerCapture(e.pointerId);};
-canvas.onpointerup=e=>{if(!start)return;const end=point(e),rect={x:Math.min(start.x,end.x),y:Math.min(start.y,end.y),width:Math.abs(start.x-end.x),height:Math.abs(start.y-end.y)};start=null;try{region(rect);}catch(error){message(error);}};
+canvas.onpointerdown=e=>{if(!document.querySelector('.annotation-tools').open){document.querySelector('.annotation-tools').open=true;return;}start=point(e);canvas.setPointerCapture(e.pointerId);};
+canvas.onpointerup=e=>{if(!start)return;const end=point(e),rect={x:Math.min(start.x,end.x),y:Math.min(start.y,end.y),width:Math.abs(start.x-end.x),height:Math.abs(start.y-end.y)};start=null;if(!rect.width||!rect.height)return;try{region(rect);}catch(error){message(error);}};
 canvas.onpointercancel=()=>{start=null;};
 $('export').onclick=()=>run(async()=>{if(window.guidesDirty)throw Error('Save your changes before exporting.');if($('export-format').value!=='editable'&&!$('sharing-review').hidden&&reviewedRevision!==modelRevision){$('sharing-review').open=true;$('sharing-review').querySelector('summary').focus();throw Error('Review the saved sharing text and capture warnings before exporting. Edit sensitive wording, save, then confirm the current review.');}let result;try{result=await request('export',{format:$('export-format').value,...(reviewedRevision===modelRevision?{reviewedRevision}:{})});}catch(error){exportCleanup=!!(await request('state')).exportCleanup;throw error;}if(result.saved)message('Export saved. Open it independently and review sensitive information before sharing.');});
 $('export-cleanup').onclick=()=>run(async()=>{const result=await request('export-cleanup');exportCleanup=!!result.exportCleanup;message(result.error||'Export destination released.');});
