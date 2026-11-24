@@ -8,7 +8,7 @@ async function main(){
  require('./native-test-isolation.cjs').assertNativeTestIsolation();
  if(process.platform!=='darwin')throw Error('Run packaged cross-form qualification on the authorized Mac.');
  const candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
- assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');
+ assert.equal(candidate.sdk,'0.1.7');assert.equal(candidate.electron,'45.2.3');
  const temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-portable-'))),output=path.join(temporary,'exports');await fs.mkdir(output);
  const asar=require('node:module').createRequire(require.resolve('@matiq-solutions/sdk'))('@electron/asar');
  let app,appChild,owned=[],browser,server,serverChild,browserOwned=[],crashBaseline=[],crashOwned=[],watchdog,watchdogFired=false,proof;

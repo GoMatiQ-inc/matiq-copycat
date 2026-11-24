@@ -12,7 +12,7 @@ async function main(){
  async function launch(){
   app=await electron.launch({args:[path.join(root,'test/fixture-main.cjs'),root,profile],env:{...process.env,XDG_CONFIG_HOME:path.join(temporary,'config')},timeout:20000});
   owned=captureTree(capture(app.process()));
-  const page=await app.firstWindow();page.setDefaultTimeout(10000);page.on('pageerror',e=>console.error('Renderer error:',e.message));console.log('Workspace URL:',page.url());return page;
+  const page=await app.firstWindow();page.setDefaultTimeout(10000);page.on('pageerror',e=>console.error('Renderer error:',e.message));console.log('Workspace URL:',page.url());await require('./setup-fixture.cjs').finishSetup(page);return page;
  }
  watchdog=setTimeout(()=>{console.error('Guides desktop test timed out; owned cleanup is required.');if(app?.process().exitCode===null)app.process().kill('SIGTERM');},60000);
  try{

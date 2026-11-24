@@ -5,7 +5,7 @@ async function launchPackagedGuides({root,profile,openWorkspace=true,suite=!!pro
  require('./native-test-isolation.cjs').assertNativeTestIsolation();
  assert.equal(process.platform,'darwin','Use the authorized Mac for actual packaged browser qualification.');
  const executable=suite?process.env.GUIDES_SUITE_EXECUTABLE_PATH:process.env.GUIDES_EXECUTABLE_PATH,candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
- assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);assert.ok(executable);
+ assert.ok(['0.1.3','0.1.7'].includes(candidate.sdk),'Use a qualified compatible SDK candidate');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);assert.ok(executable);
  const contents=path.dirname(path.dirname(executable)),bundle=path.dirname(contents),archive=path.join(contents,'Resources/app.asar'),asar=require('node:module').createRequire(require.resolve('@matiq-solutions/sdk'))('@electron/asar');let record,app;
  try{
   if(suite){
@@ -22,6 +22,7 @@ async function launchPackagedGuides({root,profile,openWorkspace=true,suite=!!pro
    for(let i=0;i<200;i++){workspace=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(workspace)break;await new Promise(resolve=>setTimeout(resolve,50));}
    assert.ok(workspace,'The signed suite must load the installed Guides workspace.');editor=workspace;editor.setDefaultTimeout(12000);
   }
+  if(openWorkspace&&candidate.sdk==='0.1.7')await require('./setup-fixture.cjs').finishSetup(editor);
   return {app,editor,candidate,suite,suiteVersion:suite?actual.version:undefined,library:path.join(suite?path.join(profile,'tools/com.matiq.guides'):profile,'guides')};
  }catch(error){if(app)await cleanupDesktop({app,owned:captureTree(capture(app.process()))});throw error;}
 }
