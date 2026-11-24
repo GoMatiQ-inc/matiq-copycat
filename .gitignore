@@ -11,3 +11,6 @@ __pycache__/
 
 native/guides-capture
 native/GuidesNativeFixture
+
+.prototype/
+prototype/*.local.json

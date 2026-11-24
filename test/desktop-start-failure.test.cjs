@@ -1,0 +1,23 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),vm=require('node:vm');
+const {createRequire}=require('node:module');
+for(const scope of ['desktop-workflow','desktop-start'])test(scope+': denied startup preserves the guide and permits normal suite shutdown',async t=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'copycat-denied-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+ const toolFile=path.join(__dirname,'../src/tool.cjs'),load=createRequire(toolFile),module={exports:{}};let request;
+ const electron={app:{getName:()=> 'MatiQ Solutions'},dialog:{showMessageBox:async()=>({response:1})},BrowserWindow:class{},nativeImage:{}};
+ let denied=true;const desktop={list:async()=>[{id:42,pid:24,application:'Fixture',title:'Owned fixture'}],start:async()=>{if(denied)throw Error('Screen Recording permission is required.');return {stop:async()=>{}};}};
+ vm.runInNewContext('(function(require,module,exports){'+await fs.readFile(toolFile,'utf8')+'\n})',{Buffer,queueMicrotask,setTimeout,clearTimeout})(name=>name==='electron'?electron:name==='./desktop.cjs'?desktop:name==='./standalone-updates.cjs'?{create:()=>({snapshot:()=>({}),busy:()=>false,dispose:async()=>{}})}:load(name),module,module.exports);
+ const host={dataDir:root,resourceDir:path.join(__dirname,'..'),emit:()=>{},handle:(_name,fn)=>{request=fn;},view:{webContents:{loadFile:async()=>{},executeJavaScript:async()=>false}}};
+ const tool=await module.exports.activate(host);await request('new');if(scope==='desktop-start')await request('desktop-list');
+ await assert.rejects(request(scope,scope==='desktop-start'?42:undefined),/Screen Recording permission is required/);
+ const state=await request('state');assert.equal(state.project.capture.phase,'stopped');assert.equal(state.desktop.active,false);assert.equal(state.unsaved,false);
+ assert.equal((await tool.status()).busy,false,'A denied first start must not block suite Quit.');
+ const files=await fs.readdir(path.join(root,'guides'));const guide=files.find(f=>f.endsWith('.mqguide'));assert(guide);
+ assert.equal(JSON.parse(await fs.readFile(path.join(root,'guides',guide))).capture.phase,'stopped');
+ denied=false;await request(scope,scope==='desktop-start'?42:undefined);await request('capture-control','pause');
+ const previous=(await request('state')).project.capture.id;denied=true;
+ await assert.rejects(request(scope,scope==='desktop-start'?42:undefined),/Screen Recording permission is required/);
+ const resumed=await request('state');assert.equal(resumed.project.capture.phase,'paused');assert.equal(resumed.project.capture.id,previous);
+ assert.equal((await tool.status()).busy,true,'A failed resume must retain the recoverable capture.');
+ await request('capture-control','stop');await tool.dispose();assert.equal((await tool.status()).busy,false);
+});

@@ -155,8 +155,8 @@ exports.activate = async host => {
       if(name==='desktop-workflow'){
         if(!current||dirty||await host.view.webContents.executeJavaScript('Boolean(window.guidesDirty)'))throw Error('Create and save a guide before recording.');
         if(activeCapture()&&!(current.capture.source==='desktop'&&current.capture.phase==='paused'))throw Error('Stop the current capture before recording the desktop.');
-        await captureWrite(activeCapture()?C.transition(current,'resume'):C.begin(current,'desktop'));
-        try{await startDesktop({id:0,pid:0});}catch(error){await captureWrite(C.transition(current,'pause',error.message));throw error;}
+        const resuming=!!activeCapture();await captureWrite(resuming?C.transition(current,'resume'):C.begin(current,'desktop'));
+        try{await startDesktop({id:0,pid:0});}catch(error){await captureWrite(C.transition(current,resuming?'pause':'stop',error.message));throw error;}
         notify();return snapshot();
       }
       if(name==='desktop-start'){
@@ -165,8 +165,8 @@ exports.activate = async host => {
         const selected=desktopChoices.find(w=>w.id===args);if(!selected)throw Error('Refresh the window list and select a visible application window.');
         const choice=await dialog.showMessageBox(host.window,{type:'warning',message:'Record the selected desktop window?',detail:'Selected application: '+selected.application+'. Only mouse actions in the selected foreground window are captured. Accessibility permission provides control labels; field values and keystrokes are never read. Screenshots can contain secrets. Browser windows, menus, dialogs and other windows are outside this scope. Review and redact before sharing.',buttons:['Cancel','Start recording'],cancelId:0,defaultId:0});
         if(choice.response!==1)return snapshot();
-        await captureWrite(activeCapture()?C.transition(current,'resume'):C.begin(current,'desktop'));
-        try{await startDesktop(selected);}catch(error){await captureWrite(C.transition(current,'pause',error.message));throw error;}
+        const resuming=!!activeCapture();await captureWrite(resuming?C.transition(current,'resume'):C.begin(current,'desktop'));
+        try{await startDesktop(selected);}catch(error){await captureWrite(C.transition(current,resuming?'pause':'stop',error.message));throw error;}
         notify();return snapshot();
       }
       if(name==='capture-control'){if(!['pause','resume','stop','cancel'].includes(args))throw Error('Choose a supported capture control.');if(current?.capture?.source==='desktop'){
