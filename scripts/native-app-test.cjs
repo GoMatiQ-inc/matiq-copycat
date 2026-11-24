@@ -135,12 +135,42 @@ async function main(){
    await click();await new Promise(resolve=>setTimeout(resolve,400));assert.deepEqual((await project()).guide,before.guide,'Display recovery must remain paused until explicit resume.');
    await start();await click();await count(before.guide.steps.length+1);await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));displayChange={...changed,restored,passed:true,explicitResume:true};console.log('PASS: actual display mode change pauses native capture, preserves work, restores the original mode and requires explicit resume.');
   }
+  // Exercise the real application Quit path while the signed native recorder is active.
+  const beforeQuit=(await project()).guide.steps.length;
+  await start();await click();await count(beforeQuit+1);hooks=await nativeRows();
+  const toolRoot=path.dirname(path.dirname(require('node:url').fileURLToPath(page.url())));
+  await app.evaluate(({dialog},directory)=>{
+    const P=process.getBuiltinModule('module').createRequire(directory+'/package.json')('./src/project.cjs'),write=P.atomicWrite;
+    global.fixtureQuitChoice=0;global.fixtureQuitWarning=null;global.fixtureQuitError='';
+    dialog.showMessageBox=async(...args)=>{const options=args.at(-1);global.fixtureQuitWarning=options;return {response:global.fixtureQuitChoice};};
+    dialog.showErrorBox=(_title,detail)=>{global.fixtureQuitError=detail;};
+    global.fixtureFailQuitSave=false;
+    P.atomicWrite=async(file,value)=>{if(global.fixtureFailQuitSave&&value.capture?.phase==='stopped')throw Error('Controlled Quit save failure');return write(file,value);};
+    global.fixtureRestoreQuitWrite=()=>{P.atomicWrite=write;};
+  },toolRoot);
+  await app.evaluate(({app})=>{setTimeout(()=>app.quit(),50);});
+  for(let i=0;i<100&&!await app.evaluate(()=>!!global.fixtureQuitWarning);i++)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.deepEqual(await app.evaluate(()=>global.fixtureQuitWarning.buttons),['Keep recording','Stop, save, and quit']);
+  assert.equal((await nativeRows()).length,1,'Cancelling Quit must retain the actual recorder.');
+  assert.equal((await project()).capture.phase,'recording');
+  await app.evaluate(({app})=>{global.fixtureQuitChoice=1;global.fixtureFailQuitSave=true;setTimeout(()=>app.quit(),50);});
+  for(let i=0;i<100&&!await app.evaluate(()=>!!global.fixtureQuitError);i++)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.match(await app.evaluate(()=>global.fixtureQuitError),/Controlled Quit save failure/);
+  assert.equal(app.process().exitCode,null,'A failed save must not exit the app.');
+  for(const hook of hooks)await verifyStopped(hook);
+  assert.equal((await project()).capture.phase,'recording','The unsuccessful final write must not replace the saved guide.');
+  await app.evaluate(()=>{global.fixtureRestoreQuitWrite();global.fixtureFailQuitSave=false;});
+  await closeNormally();
+  const quitSaved=await project();assert.equal(quitSaved.capture.phase,'stopped');assert.equal(quitSaved.guide.steps.length,beforeQuit+1);
+  page=await launch();await page.getByRole('button',{name:/Native workflow fixture/}).click();
+  await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
+  console.log('PASS: native recording Quit cancellation, failed save/no exit, and confirmed stop/save/exit preserve the captured guide.');
   await start();hooks=await nativeRows();write('quit');
   await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));
   p=await project();assert.ok(p.capture.issues.some(reason=>/closed|screen/i.test(reason)));for(const hook of hooks)await verifyStopped(hook);
   await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
   if(!executable){const status=await app.evaluate(()=>global.fixtureInstance.status());assert.equal(status.busy,false);}
-  proof={result:'passed',packaged:!!executable,form:suite?'suite':'standalone',suiteVersion,slowStoragePressure:process.env.GUIDES_PRESSURE_TEST==='1',activeNativeCaptureCrash:process.env.GUIDES_TEST_CAPTURE_CRASH==='1',windowMovement,displayChange,sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','native process absence verified'],qualification:suite?'actual signed packaged suite with real SDK package installation; approval dialogs controlled; public marketplace and fresh permissions separate':executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
+  proof={result:'passed',packaged:!!executable,form:suite?'suite':'standalone',suiteVersion,slowStoragePressure:process.env.GUIDES_PRESSURE_TEST==='1',activeNativeCaptureCrash:process.env.GUIDES_TEST_CAPTURE_CRASH==='1',windowMovement,displayChange,sourceCommit:candidate?.commit||execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),harnessCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),os:os.release(),macOS:execFileSync('/usr/bin/sw_vers',['-productVersion'],{encoding:'utf8'}).trim(),arch:process.arch,electron:await app.evaluate(()=>process.versions.electron),sdk:require('@matiq-solutions/sdk/package.json').version,checks:['actual SDK adapter receives native selected-window screenshots','pause removes actual helper and captures no actions','explicit resume','stop drains owned helper','edit/redact/save/exit/reopen preserves identities and editable assets','cancel preserves previous steps','application closure visibly pauses','recording Quit warns and cancellation retains native capture','failed Quit save keeps app open and retry saves the stopped guide','native process absence verified'],qualification:suite?'actual signed packaged suite with real SDK package installation; approval dialogs controlled; public marketplace and fresh permissions separate':executable?'signed packaged standalone execution; application dialogs controlled; fresh OS permissions and suite remain separate gates':'development SDK execution; dialogs controlled; signed installed standalone/suite and fresh permissions unqualified'};
   await closeNormally();
  }catch(error){console.error('Native journey failed:',error.stack);try{const workspace=app.context().pages().find(p=>p.url().endsWith('/src/index.html'));if(workspace){await workspace.screenshot({path:path.join(temporary,'native-failure.png')});await fs.writeFile(path.join(temporary,'native-failure.json'),JSON.stringify(await workspace.evaluate(()=>({message:document.querySelector('#message')?.textContent,capture:document.querySelector('#capture-status')?.textContent,save:document.querySelector('#save-state')?.textContent})),null,2));}console.error('Retained private native diagnostic:',temporary);}catch(diagnosticError){console.error('Private native diagnostic failed:',diagnosticError.message);}throw error;}finally{
   if(app){owned=Array.from(new Map([...owned,...await runtimeRows()].map(row=>[row.pid,row])).values());}
