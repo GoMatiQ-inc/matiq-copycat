@@ -28,17 +28,17 @@ async function main(){
   const page=await app.firstWindow();page.setDefaultTimeout(15000);
   // Application approval is controlled here; OS permissions and actual capture mechanisms are real.
   await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});});
-  if(!suite)return page;
+  if(!suite){await require('./setup-fixture.cjs').finishSetup(page);return page;}
   await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
   let tool;for(let i=0;i<200;i++){tool=app.context().pages().find(p=>p.url().includes(record.directory)&&p.url().endsWith('/src/index.html'));if(tool)break;await new Promise(resolve=>setTimeout(resolve,50));}
-  if(!tool){console.error('Suite workspace diagnostic:',JSON.stringify({expectedDirectory:record.directory,pages:app.context().pages().map(p=>p.url()),contents:await app.evaluate(({webContents})=>webContents.getAllWebContents().map(c=>({type:c.getType(),url:c.getURL()}))),shell:await page.locator('body').innerText()}));}assert.ok(tool,'The actual suite must open the installed isolated Guides workspace.');tool.setDefaultTimeout(15000);return tool;
+  if(!tool){console.error('Suite workspace diagnostic:',JSON.stringify({expectedDirectory:record.directory,pages:app.context().pages().map(p=>p.url()),contents:await app.evaluate(({webContents})=>webContents.getAllWebContents().map(c=>({type:c.getType(),url:c.getURL()}))),shell:await page.locator('body').innerText()}));}assert.ok(tool,'The actual suite must open the installed isolated Guides workspace.');tool.setDefaultTimeout(15000);await require('./setup-fixture.cjs').finishSetup(tool);return tool;
  }
  watchdog=setTimeout(()=>{if(app?.process().exitCode===null)app.process().kill('SIGTERM');if(fixture?.exitCode===null)fixture.kill('SIGTERM');},180000);
  try{
   if(executable){
    if(!process.env.GUIDES_CANDIDATE_PROOF)throw Error('Supply the verified native candidate receipt alongside the packaged executable.');
    candidate=JSON.parse(await fs.readFile(process.env.GUIDES_CANDIDATE_PROOF,'utf8'));
-   assert.equal(candidate.product,'com.matiq.guides');assert.equal(candidate.sdk,'0.1.3');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);
+   assert.equal(candidate.product,'com.matiq.guides');assert.equal(candidate.sdk,'0.1.7');assert.equal(candidate.electron,'45.2.3');assert.match(candidate.commit,/^[a-f0-9]{40}$/);
    const contents=path.dirname(path.dirname(executable)),bundle=path.dirname(contents),archive=path.join(contents,'Resources/app.asar');
    const asar=require('node:module').createRequire(require.resolve('@matiq-solutions/sdk'))('@electron/asar');
    if(suite){
@@ -54,7 +54,7 @@ async function main(){
    execFileSync('/usr/sbin/spctl',['--assess','--type','execute',bundle],{timeout:120000,stdio:'pipe'});
    const files=execFileSync('git',['ls-tree','-r','--name-only',candidate.commit,'--','src','matiq-tool.json','package.json','LICENSE','NOTICE','docs','extension/identities.json'],{cwd:root,encoding:'utf8'}).trim().split('\n');
    for(const file of files){const expected=execFileSync('git',['show',candidate.commit+':'+file],{cwd:root});const actual=suite?await fs.readFile(path.join(record.directory,file)):await asar.extractFile(archive,file);if(file==='package.json'){const a=JSON.parse(actual),e=JSON.parse(expected);for(const key of ['name','version','main','license','dependencies'])assert.deepEqual(a[key],e[key],'Packaged runtime metadata differs: '+key);}else assert.ok(actual.equals(expected),'Packaged resource differs from its recorded source: '+file);}
-   for(const name of ['sdk','runtime','shell'])assert.equal(JSON.parse((suite?await fs.readFile(path.join(record.directory,'node_modules/@matiq-solutions/'+name+'/package.json')):await asar.extractFile(archive,'node_modules/@matiq-solutions/'+name+'/package.json')).toString()).version,'0.1.3');
+   for(const name of ['sdk','runtime','shell'])assert.equal(JSON.parse((suite?await fs.readFile(path.join(record.directory,'node_modules/@matiq-solutions/'+name+'/package.json')):await asar.extractFile(archive,'node_modules/@matiq-solutions/'+name+'/package.json')).toString()).version,'0.1.7');
   }
   const binary=require('./native-fixture.cjs').buildNativeFixture({root,temporary});
   fixture=spawn(binary,[],{stdio:['pipe','pipe','ignore']});fixtureOwned=captureTree(capture(fixture));

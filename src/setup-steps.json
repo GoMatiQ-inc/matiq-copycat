@@ -1,0 +1,91 @@
+[
+  {
+    "id": "storage",
+    "title": "Your guides stay on this Mac",
+    "body": "Guides, screenshots, edits and exports are stored locally. No account or model download is needed. Imports and sharing happen only when you choose.",
+    "kind": "review",
+    "label": "I reviewed local storage and sharing."
+  },
+  {
+    "id": "capture",
+    "title": "Review capture scope",
+    "body": "Desktop recording follows your explicit Start and Stop actions. A selected-window scope and manual guide editing are also available.",
+    "kind": "choice",
+    "label": "Default capture mode",
+    "options": [
+      [
+        "desktop",
+        "Desktop workflow across apps"
+      ],
+      [
+        "window",
+        "One selected application window"
+      ]
+    ]
+  },
+  {
+    "id": "screen",
+    "title": "Allow Screen Recording",
+    "body": "Enable Screen Recording for {app}. This permits screenshots during your recording; setup itself does not record your desktop.",
+    "kind": "check",
+    "permission": true,
+    "action": "Check Screen Recording",
+    "success": "Screen Recording access verified.",
+    "help": "In System Settings \u2192 Privacy & Security, enable {app}. If macOS requests a restart, quit and reopen {app}, then check again. Setup resumes here."
+  },
+  {
+    "id": "accessibility",
+    "title": "Allow Accessibility",
+    "body": "Enable Accessibility for {app} so Copycat can identify controls and describe workflow actions. Normal typed characters are not stored as instructions.",
+    "kind": "check",
+    "permission": true,
+    "action": "Check Accessibility",
+    "success": "Accessibility access verified.",
+    "help": "In System Settings \u2192 Privacy & Security, enable {app}. If macOS requests a restart, quit and reopen {app}, then check again. Setup resumes here."
+  },
+  {
+    "id": "privacy",
+    "title": "Review screenshots before sharing",
+    "body": "Screenshots can contain private information. Review, crop and redact each guide before exporting. Automatic masking cannot guarantee that every secret is hidden.",
+    "kind": "review",
+    "label": "I understand that I must review screenshots and instructions before sharing."
+  },
+  {
+    "id": "browser",
+    "title": "Optional browser extensions",
+    "body": "Desktop recording works without an extension. You may skip this. Choosing a browser registers its local connector; install and enable the separate extension in that browser before using browser capture.",
+    "kind": "choice",
+    "label": "Browser extension",
+    "options": [
+      [
+        "none",
+        "Skip extensions"
+      ],
+      [
+        "chrome",
+        "Prepare Chrome connector"
+      ],
+      [
+        "edge",
+        "Prepare Edge connector"
+      ],
+      [
+        "firefox",
+        "Prepare Firefox connector"
+      ]
+    ]
+  },
+  {
+    "id": "updates",
+    "title": "Review updates and quitting",
+    "body": "{app} owns updates for this installed tool. Quitting during a recording asks whether to stop and save. A failed save keeps the app open.",
+    "kind": "review",
+    "label": "I reviewed update ownership and safe shutdown."
+  },
+  {
+    "id": "ready",
+    "title": "Ready to use Copycat",
+    "body": "Required setup is finished. You can revisit settings later; recording still requires your explicit Start.",
+    "kind": "summary"
+  }
+]

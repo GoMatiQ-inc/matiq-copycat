@@ -35,6 +35,17 @@ function launch(program,args,onMessage){
  }
  return {child,exited,stop};
 }
+async function permissions(host, request='probe') {
+ if(!['probe','request-screen','request-accessibility'].includes(request))throw Error('Choose a supported permission check.');
+ const program=await executable(host);let result,reason='';
+ const process=launch(program,[request],message=>{if(message.type==='permissions')result=message;if(message.type==='issue')reason=message.reason;});
+ let timer;
+ try{
+  await Promise.race([process.exited,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Permission check timed out. Check the macOS dialog, then retry.')),15000);})]);
+  if(typeof result?.screen!=='boolean'||typeof result?.accessibility!=='boolean')throw Error(reason||'Permission status was not returned. Reopen the app and retry.');
+  return {screen:result.screen,accessibility:result.accessibility};
+ }finally{clearTimeout(timer);if(process.child.exitCode===null&&process.child.signalCode===null)await process.stop();}
+}
 async function list(host){
  const program=await executable(host);let result=null,reason='';
  const process=launch(program,['list'],message=>{if(message.type==='windows')result=message.windows;if(message.type==='issue')reason=message.reason;});
@@ -60,4 +71,4 @@ async function start(host,id,pid,onEvent,onFailure,onControl){
  catch(error){expected=true;try{await process.stop();}catch(cleanup){throw Error(error.message+' Cleanup failed: '+cleanup.message);}throw error;}finally{clearTimeout(timer);}
  let stopPromise;return {stop:()=>{expected=true;return stopPromise??=(process.stop().catch(error=>{stopPromise=null;throw error;}));},exited:process.exited};
 }
-module.exports={list,start};
+module.exports={list,start,permissions};

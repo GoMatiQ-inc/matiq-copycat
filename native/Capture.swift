@@ -593,7 +593,9 @@ let geometryWarning = "The selected window moved or resized while its screenshot
 }
 
 let args = CommandLine.arguments
-if args.count == 2 && args[1] == "probe" {
+if args.count == 2 && ["probe", "request-screen", "request-accessibility"].contains(args[1]) {
+    if args[1] == "request-screen" && !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
+    if args[1] == "request-accessibility" { _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary) }
     send(["type": "permissions", "screen": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()])
     exit(0)
 }

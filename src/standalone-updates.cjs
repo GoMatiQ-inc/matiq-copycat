@@ -1,6 +1,6 @@
 const path=require('node:path');
 let enabled=false;
-const SDK='0.1.3',RUNTIME='electron-45.2.3';
+const SDK='0.1.7',RUNTIME='electron-45.2.3';
 function releaseSummary(info){
  if(!info||info.toolId!=='com.matiq.guides'||info.sdkVersion!==SDK||info.runtime!==RUNTIME||info.dataVersion!==1)throw Error('This update needs a different SDK, runtime or project format. Keep your saved work and wait for a qualified compatible release.');
  if(typeof info.version!=='string'||!/^\d+\.\d+\.\d+$/.test(info.version)||info.version.length>60)throw Error('The update version is invalid. Retry after the release metadata is corrected.');

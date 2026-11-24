@@ -1,6 +1,7 @@
+import {mountSetup} from '../node_modules/@matiq-solutions/shell/setup.mjs';
 import {render} from './render.mjs';
 const $=id=>document.getElementById(id),request=(name,args)=>window.guides.request(name,args);
-let checkedSteps=new Set(),previewObserver=null;
+let checkedSteps=new Set(),previewObserver=null,setupController=null,setupState=null;
 let updateState={enabled:false},captureStatus=null,desktopStatus=null,bridgeStatus=null,project=null,selected=null,rows=[],past=[],future=[],generation=0,editVersion=0,modelRevision=-1,reviewedRevision=null,exportCleanup=false,busy=false,draftTimer=null,draftWrite=null;
 window.guidesDispose=()=>{clearTimeout(draftTimer);previewObserver?.disconnect();};
 window.guidesDraftSnapshot=()=>project;
@@ -12,16 +13,16 @@ function message(error=''){$('message').textContent=error.message||error;}
 function state(label){$('save-state').textContent=label;$('editor-save-state').textContent=label;}
 function changed(){reviewedRevision=null;$('sharing-reviewed').checked=false;$('sharing-reviewed').disabled=true;window.guidesDirty=true;editVersion++;state('Unsaved');request('dirty').catch(message);clearTimeout(draftTimer);draftTimer=setTimeout(()=>{if(project&&!busy&&window.guidesDirty)draftWrite=Promise.resolve(draftWrite).then(()=>request('draft',project)).catch(error=>message('Recovery draft failed. Save the guide now: '+error.message));},750);}
 const historySnapshot=()=>({project:{...project,...(project.capture?{capture:clone(project.capture)}:{}),guide:clone(project.guide),assets:{...project.assets}},selected,checked:[...checkedSteps]});
-function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];}
+function remember(){past.push(historySnapshot());if(past.length>20)past.shift();future=[];$('undo').disabled=false;$('redo').disabled=true;}
 function mutation(fn){if(busy)return;if(captureStatus&&['recording','paused'].includes(captureStatus.phase)){message('Stop capture to edit your guide.');return;}remember();fn();changed();draw();}
 async function run(fn){if(busy)return;busy=true;message();document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);try{return await fn();}catch(error){message(error);}finally{busy=false;document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=false);draw();}}
 function drawUpdates(){const u=updateState;$('app-updates').hidden=!u.enabled;if(!u.enabled)return;$('update-status').textContent=['Current version '+u.current,u.offer?'Version '+u.offer.version+' · '+Math.ceil(u.offer.bytes/1024/1024)+' MiB':'',u.phase==='downloading'?u.progress+'%':'',u.detail].filter(Boolean).join(' — ');for(const [action,visible]of [['check',true],['download',u.phase==='available'],['restart',u.phase==='ready'],['cleanup',u.phase==='cleanup']]){const button=$('update-'+action);button.hidden=!visible;button.disabled=busy||exportCleanup||(action!=='cleanup'&&u.busy);}}
-function accept(result){if(result.updates)updateState=result.updates;if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected,resetHistory=previousID!==result.project?.guide.id||captureStatus?.id!==result.project?.capture?.id;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;if(resetHistory){past=[];future=[];checkedSteps.clear();}message(result.error);draw();}
+function accept(result){if(result.setup){setupState=result.setup;if(!setupState.completed&&setupController?.isComplete())setupController.open().catch(message);}if(result.updates)updateState=result.updates;if(Number.isSafeInteger(result.revision)&&result.revision<modelRevision)return;modelRevision=result.revision??modelRevision;const previousID=project?.guide.id,previousStep=selected,resetHistory=previousID!==result.project?.guide.id||captureStatus?.id!==result.project?.capture?.id;project=result.project;captureStatus=project?.capture||null;bridgeStatus=result.bridge||null;exportCleanup=!!result.exportCleanup;$('export-cleanup').hidden=!exportCleanup;desktopStatus=result.desktop||null;window.guidesDirty=!!result.unsaved;state(({saved:'Saved',saving:'Saving',failed:'Failed to save',unsaved:'Unsaved'})[result.saveState]||'Unsaved');selected=captureStatus?.phase==='recording'?project?.guide.steps.at(-1)?.id||null:previousID===project?.guide.id&&project?.guide.steps.some(s=>s.id===previousStep)?previousStep:project?.guide.steps[0]?.id||null;if(resetHistory){past=[];future=[];checkedSteps.clear();}message(result.error);draw();}
 async function list(){rows=await request('list');drawLibrary();}
 function drawLibrary(){const target=$('guide-list');target.replaceChildren();const query=$('search').value.toLowerCase();for(const row of rows.filter(r=>(r.title+' '+r.description).toLowerCase().includes(query))){const button=document.createElement('button');button.className='guide-card';button.disabled=!!row.invalid;const title=document.createElement('strong');title.textContent=row.title;const detail=document.createElement('span');detail.textContent=`${row.steps} steps`;button.append(title,detail);button.onclick=()=>run(async()=>accept(await request('open',row.id)));target.append(button);}if(!target.childElementCount)target.textContent='No matching guides. Create a guide to begin.';}
 function draw(){drawContent();$('export-cleanup').hidden=!exportCleanup;if(busy||exportCleanup)document.querySelectorAll('button,input,textarea,select').forEach(b=>b.disabled=true);if(exportCleanup&&!busy)$('export-cleanup').disabled=false;drawUpdates();}
 function drawContent(){
-  $('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
+  $('settings').hidden=true;$('library').hidden=!!project;$('editor').hidden=!project;$('privacy').hidden=true;
   if(!project){previewObserver?.disconnect();document.body.dataset.recording='false';drawLibrary();return;}
   const active=captureStatus&&['recording','paused'].includes(captureStatus.phase);
   for(const id of ['back','library-nav','title','description','instruction','notes','add-step','save','undo','redo','duplicate-guide','delete-guide','up','down','duplicate-step','delete-step','replace-image','apply-region','clear-annotations','export'])$(id).disabled=!!active;
@@ -120,9 +121,23 @@ window.guides.subscribe(result=>{if(result.updateOnly){updateState=result.update
 for(const action of ['check','download','restart','cleanup'])$('update-'+action).onclick=()=>run(async()=>{updateState=await request('update-'+action);drawUpdates();});
 $('bridge-enable').onclick=()=>run(async()=>accept(await request('bridge-enable')));
 $('bridge-install').onclick=()=>run(async()=>{await request('bridge-install',$('bridge-browser').value);message('Native bridge registered. Load the matching browser extension explicitly, then connect and select this instance.');});
-$('new-record').onclick=()=>run(async()=>{accept(await request('new'));accept(await request('desktop-workflow'));});
-$('desktop-workflow').onclick=()=>run(async()=>accept(await request('desktop-workflow')));
-$('desktop-list').onclick=()=>run(async()=>{const windows=await request('desktop-list');const select=$('desktop-window');select.replaceChildren();for(const window of windows){const option=document.createElement('option');option.value=window.id;option.textContent=window.application+' — '+window.title;select.append(option);}if(!windows.length)message('No supported windows selected. Open a desktop application, then refresh the window list.');});
+$('new-record').onclick=()=>run(async()=>{accept(await request('new'));await startConfiguredCapture();});
+$('desktop-workflow').onclick=()=>run(startConfiguredCapture);
+async function listDesktopWindows(){const windows=await request('desktop-list');const select=$('desktop-window');select.replaceChildren();for(const window of windows){const option=document.createElement('option');option.value=window.id;option.textContent=window.application+' — '+window.title;select.append(option);}if(!windows.length)message('No supported windows selected. Open a desktop application, then refresh the window list.');}
+async function startConfiguredCapture(){
+ if(setupState?.values.capture==='window'){
+  document.querySelector('.capture-options').open=true;document.querySelector('.capture-options details').open=true;
+  await listDesktopWindows();message('Select the intended application window, then choose Start / resume selected window.');
+ }else accept(await request('desktop-workflow'));
+}
+$('desktop-list').onclick=()=>run(listDesktopWindows);
 $('desktop-start').onclick=()=>run(async()=>accept(await request('desktop-start',Number($('desktop-window').value))));
 for(const command of ['pause','resume','stop','cancel'])$('capture-'+command).onclick=()=>run(async()=>accept(await request('capture-control',command)));
 await run(async()=>{accept(await request('state'));await list();});
+
+$('settings-nav').onclick=()=>{$('library').hidden=true;$('editor').hidden=true;$('privacy').hidden=true;$('settings').hidden=false;};
+const setupRequest=(command,args={})=>request('setup',{command,...args});
+const definition=await setupRequest('state');
+const steps=definition.steps.map(step=>({...step,body:step.body.replaceAll('{app}',definition.applicationName),...(step.help?{help:step.help.replaceAll('{app}',definition.applicationName)}:{})}));
+setupController=await mountSetup({name:'Copycat',steps,api:{read:()=>setupRequest('state'),review:(id,value)=>setupRequest('review',{id,value}),check:id=>setupRequest('check',{id}),progress:step=>setupRequest('progress',{step}),complete:()=>setupRequest('complete'),reopen:()=>setupRequest('reopen')},onComplete:async()=>{accept(await request('state'));await list();}});
+$('review-setup').onclick=()=>setupController.open().catch(message);
