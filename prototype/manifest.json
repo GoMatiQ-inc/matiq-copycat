@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "id": "com.matiq.guides",
+  "name": "Copycat",
+  "workspace": "src/index.html",
+  "roots": [
+    "src"
+  ],
+  "bridge": "prototype/bridge.js",
+  "overrides": {},
+  "baselineVersion": "0.1.23"
+}

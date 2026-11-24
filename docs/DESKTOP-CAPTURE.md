@@ -112,3 +112,21 @@ Browser windows can participate in the same desktop session through OS capture. 
 Development evidence at source7dcbd24 on macOS15.7.7arm64 in Tart passes an actual SDK-workspace journey through the native fixture, TextEdit and Chrome, including a real menu and sheet, typing, Save, drag, right-click/Escape, coalesced double-click and real scroll-view movement. Menu-bar pause stops the actual recorder; paused input adds nothing; explicit resume appends; cancellation preserves the earlier guide and assets. Independent Vision verifies disappearing menu/dialog and browser pixels with aligned highlights, and owned app/driver/browser/recorder/listener cleanup passes.55 core checks and SDK validation pass. These are development integration results, **not signed packaged 0.1.19 qualification**.
 
 Reproduce in the isolated macOS guest with GUIDES_NATIVE_TEST_VM=tart GUIDES_WORKFLOW_APP=1 node scripts/desktop-workflow-test.cjs and an explicitly owned real Chrome executable in GUIDES_TEST_CHROMIUM. Reuse GUIDES_SWIFT_MODULE_CACHE under the native storage guard. The same test accepts the existing signed standalone/suite executable, candidate-proof and suite-package variables for packaged qualification. Do not run GUI fixtures on an active physical desktop. Multiple-display attachment/removal and actual sleep/lock still require the isolated CI capability; no untested target is advertised.
+
+
+## Denied initial startup and setup draft — 2026-11-24
+
+A denied first native capture previously persisted a paused session even though
+recording never became ready. The suite therefore refused Quit as active work.
+Initial startup failure now persists a stopped session with its visible warning;
+a failed resume retains the existing paused session and its work. No OS grants
+are bypassed. Both desktop-workflow and selected-window paths pass regression
+checks through the actual adapter with a controlled denied native start, saved
+project verification and final disposal. All 57 Linux core tests pass. This is
+controlled adapter evidence, not fresh-profile macOS permission qualification
+or an installed public fix.
+
+`prototype/` owns a first-run setup design over the real renderer and shared
+shell. Permissions are simulated; production setup remains pending explicit
+owner review. The draft reviews local storage, capture scope, Screen Recording,
+Accessibility, sharing privacy, optional extensions and update/shutdown behavior.
