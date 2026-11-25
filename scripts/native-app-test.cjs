@@ -65,7 +65,7 @@ async function main(){
   await page.getByRole('button',{name:'New guide',exact:true}).click();
   await page.getByLabel('Guide title',{exact:true}).fill('Native workflow fixture');
   await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#save-state').textContent==='Saved');
-  await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();
+  await require('./setup-fixture.cjs').openCaptureOptions(page,'window');await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();
   await page.locator('#desktop-window').selectOption(String(selected.window));
   const library=path.join(suite?path.join(profile,'tools/com.matiq.guides'):profile,'guides');
   const guideFile=path.join(library,(await fs.readdir(library)).find(name=>name.endsWith('.mqguide')));
@@ -92,7 +92,7 @@ async function main(){
   page=await launch();await page.getByRole('button',{name:/Native workflow fixture/}).click();await page.waitForFunction(()=>document.querySelector('#instruction').value==='Open the native settings panel');
   p=await project();assert.equal(p.guide.id,guideID);assert.equal(p.guide.steps[0].id,firstID);assert.ok(p.guide.steps[0].annotations.some(annotation=>annotation.type==='redact'));
   // Explicit window selection is needed again after restarting the app.
-  await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
+  await require('./setup-fixture.cjs').openCaptureOptions(page,'window');await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
   await start();await click();await count(3);
   await page.getByRole('button',{name:'Cancel capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture cancelled'));assert.equal((await project()).guide.steps.length,2);assert.equal((await project()).guide.steps[0].id,firstID);assert.equal((await nativeRows()).length,0);
   if(process.env.GUIDES_TEST_CAPTURE_CRASH==='1'){
@@ -104,7 +104,7 @@ async function main(){
    await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));
    const recovered=await page.evaluate(()=>window.guides.request('state'));assert.deepEqual(recovered.project.guide,beforeCrash.guide);assert.deepEqual(recovered.project.assets,beforeCrash.assets);assert.ok(recovered.project.capture.issues.some(reason=>reason.includes('interrupted')));assert.equal((await nativeRows()).length,0);
    await page.getByRole('button',{name:'Stop capture',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture stopped'));
-   await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
+   await require('./setup-fixture.cjs').openCaptureOptions(page,'window');await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
    console.log('PASS: actual SIGKILL during native recording stops helper before fixture cleanup and reopens identical guide/assets visibly paused.');
   }
   if(process.env.GUIDES_PRESSURE_TEST==='1'){
@@ -163,7 +163,7 @@ async function main(){
   await closeNormally();
   const quitSaved=await project();assert.equal(quitSaved.capture.phase,'stopped');assert.equal(quitSaved.guide.steps.length,beforeQuit+1);
   page=await launch();await page.getByRole('button',{name:/Native workflow fixture/}).click();
-  await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
+  await require('./setup-fixture.cjs').openCaptureOptions(page,'window');await page.getByRole('button',{name:'Choose desktop window',exact:true}).click();await page.locator('#desktop-window').selectOption(String(selected.window));
   console.log('PASS: native recording Quit cancellation, failed save/no exit, and confirmed stop/save/exit preserve the captured guide.');
   await start();hooks=await nativeRows();write('quit');
   await page.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture paused'));

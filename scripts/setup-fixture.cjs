@@ -11,4 +11,10 @@ async function finishSetup(page){
  }
  await wizard.waitFor({state:'hidden'});
 }
-module.exports={finishSetup};
+async function openCaptureOptions(page,section){
+ const options=page.locator('.capture-options');if(!await options.count())return;
+ if(!await options.evaluate(node=>node.open))await options.locator('summary').first().click();
+ const details=page.locator(section==='window'?'.capture-options > details:first-of-type':'#browser-tools');
+ if(await details.count()&&!await details.evaluate(node=>node.open))await details.locator('summary').first().click();
+}
+module.exports={finishSetup,openCaptureOptions};
