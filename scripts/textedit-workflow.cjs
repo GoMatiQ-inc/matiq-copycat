@@ -26,7 +26,7 @@ async function openTextEdit({root,temporary}){
 async function captureTextEditWorkflow({app,editor,file,root,temporary,candidate}){
  const before=JSON.parse(await fs.readFile(file,'utf8')),session=await openTextEdit({root,temporary});let proof;
  try{
-  await editor.getByRole('button',{name:'Choose desktop window',exact:true}).click();await editor.locator('#desktop-window').selectOption(String(session.ready.window));
+  await require('./setup-fixture.cjs').openCaptureOptions(editor,'window');await editor.getByRole('button',{name:'Choose desktop window',exact:true}).click();await editor.locator('#desktop-window').selectOption(String(session.ready.window));
   await editor.getByRole('button',{name:'Start / resume selected window',exact:true}).click();await editor.waitForFunction(()=>document.querySelector('#capture-status').textContent.includes('capture recording'));
   const hooks=captureTree(capture(app.process())).filter(row=>identity(row.pid)?.endsWith('/guides-capture'));assert.equal(hooks.length,1,'The actual signed helper must observe the selected TextEdit window.');
   const selected=await session.command('select','selected');assert.ok(selected.selectedLength>0,'The owned TextEdit document must select actual fixture text before formatting.');
