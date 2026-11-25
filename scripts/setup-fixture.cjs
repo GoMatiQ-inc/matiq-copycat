@@ -17,4 +17,8 @@ async function openCaptureOptions(page,section){
  const details=page.locator(section==='window'?'.capture-options > details:first-of-type':'#browser-tools');
  if(await details.count()&&!await details.evaluate(node=>node.open))await details.locator('summary').first().click();
 }
-module.exports={finishSetup,openCaptureOptions};
+async function openHostedCopycat(page,version){
+ if(version==='0.1.1')await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
+ else await page.getByRole('button',{name:'Copycat',exact:true}).click();
+}
+module.exports={finishSetup,openCaptureOptions,openHostedCopycat};
