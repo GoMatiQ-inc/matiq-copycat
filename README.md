@@ -2,11 +2,37 @@
 
 A local-first workflow-documentation tool for MatiQ Solutions. Capture a browser or desktop workflow, then review and edit its illustrated steps and save or export the guide.
 
-**Candidate0.1.20** puts desktop recording first: click **Record desktop**, work across apps and browser windows, then stop, edit and export. No browser extension, bridge, account or model is needed. Clicks, typing bursts, Copy/Cut/Paste, scrolling, dragging and common keyboard actions become illustrated editable steps. Typing and paste screenshots show the resulting field state. The real Tart development journey passes23 preserved actions, editing/redaction and normal quit/reopen; signed standalone/suite candidate qualification is pending. Released0.1.18 remains selected-window only. See [desktop capture evidence](docs/DESKTOP-CAPTURE.md).
+**Released 0.1.24** adds required first-run setup and safe recording Quit.
+[Download the signed Apple Silicon Mac DMG](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.24/MatiQ-Copycat-0.1.24-mac-arm64.dmg),
+or explicitly install Copycat in MatiQ Solutions Marketplace. Use **Solutions
+0.1.3 or newer** for hosted recording Quit.
 
-**Released build0.1.18** passes actual signed macOS arm64 standalone and suite execution with developer extensions0.1.13: all six browser/form journeys, Firefox/TextEdit mixed capture, native resize interruption and aligned recovery, native controls/display interruption/crash recovery, editing/save/reopen, independent exports and portable recovery. SDK/runtime/shell0.1.3, Electron45.2.3 and dataVersion1 are unchanged. [Published artifacts and exact qualification receipts](https://github.com/GoMatiQ-inc/matiq-copycat/releases) identify versions and limits. Actual normal-launch Accessibility and Screen Recording revocation pass in both forms, including explicit suite resume after restoration. First-use permission setup passes in fresh app data after per-app OS decision resets, including real Deny/Grant dialogs in both forms. Full acceptance remains incomplete: sleep/lock, display hotplug/multiple displays and signed persistent Firefox/public stores remain unqualified or externally gated. No Windows, Linux, Intel macOS or Safari support is advertised.
+Click **Record desktop**, work across apps and browser windows, then stop, edit
+and export. Desktop recording needs no extension, account, subscription or model.
+Browser integrations remain optional. Setup reviews storage, scope, actual
+Screen Recording/Accessibility access, privacy, optional extensions and updates.
+**Finish later** saves progress; capture remains blocked until setup is complete.
 
-Copycat uses the qualified MatiQ Solutions **SDK/runtime/shell 0.1.3** and Electron **45.2.3**. One implementation produces the standalone macOS application and signed suite package. Shared shell and brand assets come from the SDK.
+Quit during recording offers **Keep recording** or **Stop, save, and quit**.
+Confirmation stops capture, drains pending steps/screenshots and saves before
+exit. Failed saves keep the app open with retryable work. Existing standalone
+builds using SDK 0.1.3 reject a cross-SDK automatic update: install this DMG once,
+keeping existing application data.
+
+Signed standalone and suite qualification passes on macOS 15.7.7 arm64: native
+recording Quit cancellation/save failure/retry, selected-window movement,
+Chrome/TextEdit mixed capture, all six Chrome/Edge/Firefox and standalone/suite
+journeys, portable project round trips, independent HTML/Markdown/PDF inspection,
+redactions, interrupted-save recovery and owned process/listener cleanup.
+[Exact source, harnesses and limits](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.24/packaged-qualification-0.1.24.json).
+Application approval/file dialogs are controlled fixtures. Fresh OS grant/revoke
+decisions, sleep/lock, display hotplug and public browser-store distribution
+remain separate qualification. No Windows, Linux, Intel Mac or Safari support is
+advertised by this release.
+
+Copycat uses MatiQ Solutions **SDK/runtime/shell 0.1.7** and Electron **45.2.3**.
+One implementation produces the standalone app and signed suite package.
+Project dataVersion 1 and existing guide/image identities are preserved.
 
 Core capture, editing, project storage and HTML/Markdown/PDF export run locally without an account, subscription or model. Screenshots may contain secrets. Review and redact before sharing; editable projects retain originals, while the sanitized portable export excludes them. Read [project format and sharing safety](docs/PROJECT-FORMAT.md) and [optional extension tools](docs/EXTENSIONS.md).
 

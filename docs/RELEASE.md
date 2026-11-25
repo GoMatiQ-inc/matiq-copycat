@@ -1,6 +1,6 @@
 # Native candidate build and release contract
 
-The current qualified SDK/runtime/shell is 0.1.3; Electron is 45.2.3. The intended first target is darwin-arm64. No other target is qualified by these scripts.
+The current qualified SDK/runtime/shell is 0.1.7; Electron is 45.2.3. The intended first target is darwin-arm64. No other target is qualified by these scripts.
 
 Reconcile the exact committed source on the authorized native release host. Use the machine's storage guard for dependency installation, native tests, candidate builds and verification. Use one compatible installation per host/lockfile; do not transfer Linux node_modules to macOS.
 
@@ -151,7 +151,7 @@ To reproduce manually in the isolated macOS test environment: open the signed ap
 
 ## Actual suite Accessibility revocation and restored-permission resume
 
-The [suite0.1.18 revocation receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.18/accessibility-revocation-suite-0.1.18.json) now qualifies the suite permission identity separately from standalone. The same signed suite0.1.1 is installed in an isolated user Applications location and opened through LaunchServices; application archive SHA256 remains2f5b2bda3d0759870fbe8853b52b7e264123c9ee81a733619c58ec9e6558c77e. Tool source remainsaaf4b17, SDK/runtime/shell0.1.3 and Electron45.2.3.
+The [suite 0.1.18 revocation receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.18/accessibility-revocation-suite-0.1.18.json) now qualifies the suite permission identity separately from standalone. The same signed suite 0.1.1 is installed in an isolated user Applications location and opened through LaunchServices; application archive SHA256 remains2f5b2bda3d0759870fbe8853b52b7e264123c9ee81a733619c58ec9e6558c77e. Tool source remainsaaf4b17, SDK/runtime/shell0.1.3 and Electron45.2.3.
 
 Native Settings authorization changes the independently read suite grant from2 to0 and back to2. Actual capture visibly pauses, the recorder exits before fixture cleanup, guide/assets remain identical and a later actual click adds no step. After restoration the fixture explicitly verifies paused state and no recorder, then resumes capture and adds one real screenshot while preserving the prior step/asset. Normal Stop, suite exit, controlled target exit, owned Settings exit and listener absence pass; both original application grants are independently confirmed restored.
 
@@ -172,3 +172,45 @@ Initial controller attempts are retained as failures: a native outline column wa
 This is fresh app data plus supported per-app OS decision resets in the existing OS user. It does not claim a pristine macOS user. The suite additionally verifies actual live marketplace 0.1.18 listing and capability-review cancellation without installation, followed by explicit real signed download, exact source verification and hosted tool use. The suite application remains 0.1.1 with unchanged bytes.
 
 The first suite attempt failed when the read-only authorization observer encountered an OS database lock. The final fresh-profile attempt uses a bounded two-second SQLite busy wait, retains actual state assertions and verifies all four original grants and owned-resource cleanup. No shipped tool/SDK/runtime changes. Broader display/sleep cases and signed browser distribution remain separate.
+
+
+## Required setup and recording Quit — released 0.1.24
+
+[The immutable release](https://github.com/GoMatiQ-inc/matiq-copycat/releases/tag/v0.1.24)
+ships signed source `07804bc10cc50c5f51b887a3a07bf1b32b73af82`, SDK/runtime/shell
+0.1.7, Electron 45.2.3 and unchanged project dataVersion 1. Both forms use the
+same tool-owned persisted setup definitions and shared SDK presentation/native
+backend gates. Required access is checked against the actual host application;
+optional browser integrations require an explicit choice but remain optional.
+
+Actual signed native tests verify recording Quit cancellation, controlled final
+save failure with no exit, and retry saving the captured guide before exit in
+both forms. The guide reopens with its identities and images intact. Mixed
+Chrome/TextEdit capture passes both forms. Project/export and interrupted-save
+recovery pass at harness 3d4f65e; all six real browser/form journeys pass at
+harness 0e89b92. The latter holds only its test-owned cancellation HTTP response
+until actual Cancel; ordinary navigation retains the 800ms streamed transition.
+It retains pending-transition, no-later-screenshot and preserved-assets assertions.
+No product rebuild was needed for these fixture-only corrections.
+
+[Qualification receipt](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.24/packaged-qualification-0.1.24.json)
+records each exact source/harness and its limits. Public Marketplace install and
+released update receipts are separate from local signed SDK installation tests.
+For the current Marketplace fixture, supply the independently verified suite
+app.asar SHA256 in `GUIDES_SUITE_ARCHIVE_SHA256`; the old hardcoded suite 0.1.1
+archive hash is no longer appropriate.
+
+Use Solutions 0.1.3 or newer for hosted recording-aware Quit. Standalone SDK 0.1.3
+updates intentionally reject a cross-SDK move to 0.1.7; install the new DMG once
+without deleting application data. Do not weaken the compatibility check or
+advertise a qualified automatic standalone migration. Developer extensions,
+controlled dialogs, fresh OS permissions and other platform/OS/display cases
+retain their explicit qualification limits.
+
+[Published Marketplace and update evidence](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.24/released-marketplace-qualification-0.1.24.json)
+now verifies actual public signed catalog/package downloads in suite0.1.3:
+browsing installs nothing, cancelled approval keeps the tool absent, explicit
+Install opens the released tool and saves a controlled mixed project. The real
+0.1.23 → 0.1.24 public update stages safely, refuses unsaved restart, then relaunches
+the unchanged suite after save. Existing guide/step identities and image assets
+remain editable. All owned processes/listeners are independently absent.
