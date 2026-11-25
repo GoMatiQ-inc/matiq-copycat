@@ -22,4 +22,12 @@ async function openHostedCopycat(page,version){
  if(version==='0.1.1')await page.locator('article').filter({has:page.getByRole('heading',{name:'MatiQ Copycat',exact:true})}).getByRole('button',{name:'Open',exact:true}).click();
  else await page.getByRole('button',{name:'Copycat',exact:true}).click();
 }
-module.exports={finishSetup,openCaptureOptions,openHostedCopycat};
+async function openSuiteUpdates(page,version){
+ if(version==='0.1.1')await page.getByRole('button',{name:'Downloads & updates',exact:true}).click();
+ else{await page.getByRole('button',{name:'Open app launcher',exact:true}).click();await page.getByRole('dialog',{name:'Installed apps',exact:true}).getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Downloads & updates',exact:true}).click();}
+}
+async function returnToHostedCopycat(page,version){
+ if(version==='0.1.1')await page.locator('#open-tools').getByRole('button',{name:'MatiQ Copycat',exact:true}).click();
+ else{await page.getByRole('button',{name:'MatiQ Solutions home',exact:true}).click();await openHostedCopycat(page,version);}
+}
+module.exports={finishSetup,openCaptureOptions,openHostedCopycat,openSuiteUpdates,returnToHostedCopycat};
