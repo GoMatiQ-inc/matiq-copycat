@@ -206,3 +206,11 @@ without deleting application data. Do not weaken the compatibility check or
 advertise a qualified automatic standalone migration. Developer extensions,
 controlled dialogs, fresh OS permissions and other platform/OS/display cases
 retain their explicit qualification limits.
+
+[Published Marketplace and update evidence](https://github.com/GoMatiQ-inc/matiq-copycat/releases/download/v0.1.24/released-marketplace-qualification-0.1.24.json)
+now verifies actual public signed catalog/package downloads in suite0.1.3:
+browsing installs nothing, cancelled approval keeps the tool absent, explicit
+Install opens the released tool and saves a controlled mixed project. The real
+0.1.23 → 0.1.24 public update stages safely, refuses unsaved restart, then relaunches
+the unchanged suite after save. Existing guide/step identities and image assets
+remain editable. All owned processes/listeners are independently absent.
