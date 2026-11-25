@@ -4,6 +4,7 @@ async function finishSetup(page){
  const wizard=page.getByRole('dialog',{name:'Copycat setup',exact:true});
  if(!await wizard.isVisible())return;
  for(let index=0;index<8;index++){
+  await wizard.getByText('Copycat setup · '+(index+1)+' of 8',{exact:true}).waitFor();
   const choice=wizard.locator('select');if(await choice.count())await choice.selectOption(index===1?'desktop':'none');
   const review=wizard.getByRole('checkbox');if(await review.count())await review.check();
   const check=wizard.getByRole('button',{name:/^Check (Screen Recording|Accessibility)$/});if(await check.count())await check.click();
