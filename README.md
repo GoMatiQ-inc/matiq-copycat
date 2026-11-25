@@ -1,4 +1,8 @@
+<p><a href="https://matiqinc.com"><img src="https://raw.githubusercontent.com/GoMatiQ-inc/matiq-solutions/main/packages/shell/assets/matiq-solutions-wordmark-dark.png" alt="MatiQ Solutions, part of MatiQ Inc" width="220"></a></p>
+
 # MatiQ Copycat
+
+[MatiQ Inc](https://matiqinc.com) · [Downloads](https://github.com/GoMatiQ-inc/matiq-copycat/releases) · [Documentation](docs/PROJECT-FORMAT.md) · [Report an issue](https://github.com/GoMatiQ-inc/matiq-copycat/issues) · [License](LICENSE)
 
 A local-first workflow-documentation tool for MatiQ Solutions. Capture a browser or desktop workflow, then review and edit its illustrated steps and save or export the guide.
 
@@ -37,6 +41,12 @@ Project dataVersion 1 and existing guide/image identities are preserved.
 Core capture, editing, project storage and HTML/Markdown/PDF export run locally without an account, subscription or model. Screenshots may contain secrets. Review and redact before sharing; editable projects retain originals, while the sanitized portable export excludes them. Read [project format and sharing safety](docs/PROJECT-FORMAT.md) and [optional extension tools](docs/EXTENSIONS.md).
 
 The product was previously developed under the working name MatiQ Guides. Compatibility identifiers, version-1 `.mqguide` projects and the existing standalone data directory remain stable; the SDK's documented profile option preserves that directory. The suite uses its own tool data directory. Move projects between forms through editable export/import.
+
+## Part of MatiQ Solutions
+
+**Useful software. Made by MatiQ.** Use this app on its own, or explore the [MatiQ Solutions desktop suite](https://github.com/GoMatiQ-inc/matiq-solutions). The family also includes [Voice](https://github.com/GoMatiQ-inc/matiq-voice) for local dictation and meeting notes, and [Companion](https://github.com/GoMatiQ-inc/matiq-companion) for local AI work.
+
+[MatiQ Inc](https://matiqinc.com) builds businesses and technology for a better quality of life. For product problems, use this repository's issues; for business inquiries, [talk with us](mailto:hello@matiqinc.com).
 
 ## Development and release
 
