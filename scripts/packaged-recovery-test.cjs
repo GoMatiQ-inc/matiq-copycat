@@ -7,7 +7,7 @@ async function main(){
  const root=path.join(__dirname,'..'),temporary=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'guides-recovery-'))),receipts=[];
  let phase='setup',app=null,owned=[],page,child=null,proof,portable=process.env.GUIDES_MIXED_PROJECT;assert.ok(portable,'Supply the retained real captured mixed project for portable recovery qualification.');
  const watchdog=setTimeout(()=>{if(child?.exitCode===null)child.kill('SIGTERM');},240000);
- async function open(suite,profile){phase='open '+(suite?'suite':'standalone');const launched=await launchPackagedGuides({root,profile,suite});app=launched.app;page=launched.editor;child=app.process();owned=captureTree(capture(child));return launched;}
+ async function open(suite,profile){phase='open '+(suite?'suite':'standalone');const launched=await launchPackagedGuides({root,profile,suite});app=launched.app;page=launched.editor;child=app.process();owned=captureTree(capture(child));await app.evaluate(({dialog})=>{global.guidesRecoveryCloseError='';dialog.showErrorBox=(_title,text)=>{global.guidesRecoveryCloseError=text;};});return launched;}
  async function crash(){phase='terminate owned app';
   owned=captureTree(capture(child)).map(row=>({...row,identity:execFileSync('/bin/ps',['-p',String(row.pid),'-o','uid=,lstart=,comm='],{encoding:'utf8'}).trim()}));
   const exited=once(child,'exit');child.kill('SIGKILL');await exited;app=null;child=null;await cleanupDesktop({owned});owned=[];
